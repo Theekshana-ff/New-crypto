@@ -9,39 +9,53 @@ let S={sym:'BTC',tf:'1h',img:'',c:[],A:null,T:null,lines:[],L:{struct:1,ob:1,fvg
 setInterval(function t(){const d=new Date();$('time').textContent=d.toLocaleTimeString();$('date').textContent=d.toLocaleDateString('en',{weekday:'short',year:'numeric',month:'short',day:'numeric'});return t}(),1000);
 const tg=o=>{$('drawer').classList.toggle('open',o);$('scrim').classList.toggle('show',o)};
 $('menuBtn').onclick=()=>tg(1);$('scrim').onclick=()=>tg(0);
-// chart
-const chart=LightweightCharts.createChart($('cht'),{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
-const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
-const cv=$('ov'),ctx=cv.getContext('2d');
-new ResizeObserver(()=>{const r=$('box').getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;sig=''}).observe($('box'));
-function draw(){
- const d=devicePixelRatio||1;ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,cv.width,cv.height);
- const A=S.A,c=S.c;if(!A)return;const ts=chart.timeScale(),W=ts.width(),X=i=>ts.logicalToCoordinate(i),Y=p=>series.priceToCoordinate(p);
- ctx.font='11px sans-serif';
- const line=(x1,x2,y,col,w,dash,txt)=>{if(x1==null||x2==null||y==null)return;ctx.strokeStyle=col;ctx.lineWidth=w;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);if(txt){ctx.fillStyle=col;ctx.textAlign='center';ctx.fillText(txt,(x1+x2)/2,y-4)}};
- const zone=(z,col,txt)=>{const x1=X(z.i),x2=Math.min(z.mit?X(z.end):W,W),y1=Y(z.top),y2=Y(z.bot);if(x1==null||x2==null||y1==null||y2==null||x2<0)return;
-  ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=1;ctx.fillRect(x1,y1,x2-x1,y2-y1);ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.fillStyle=col;ctx.textAlign='left';ctx.fillText(txt,Math.max(x1,0)+4,y1+11)};
- if(S.L.ob)for(const d of[1,-1])A.obs.filter(o=>!o.mit&&o.d===d).slice(-3).forEach(o=>zone(o,d>0?'#2ecc9a':'#ff5d6c',(d>0?'Bull':'Bear')+' OB'));
- if(S.L.fvg)for(const d of[1,-1])A.fvg.filter(o=>!o.mit&&o.d===d).slice(-4).forEach(o=>zone(o,d>0?'#4ea1ff':'#f0b429','FVG'));
- if(S.L.struct)A.ev.slice(-14).forEach(e=>line(X(e.from),X(e.to),Y(e.p),e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?1.6:1,e.k==='CHoCH'?[5,3]:[],e.k+(e.d>0?' ↑':' ↓')));
- if(S.L.liq){A.liq.slice(-6).forEach(q=>line(X(q.from),q.st==='open'?W:X(q.at),Y(q.p),'#b388ff',1,[2,3],(q.t==='H'?'EQH':'EQL')+' $$$'));
-  A.sweeps.forEach(s=>{const x=X(s.at),y=Y(s.t==='H'?c[s.at].high:c[s.at].low);if(x==null||y==null)return;line(X(s.i),x,Y(s.p),'#b388ff',1,[2,3]);ctx.fillStyle='#ff7ad9';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText('X',x,s.t==='H'?y-4:y+14);ctx.font='11px sans-serif'})}
+// chart view factory: main chart + one separate chart per method
+const V=[],force=()=>V.forEach(v=>v.force());
+function view(box,Lf){
+ const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
+ const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
+ const cv=box.querySelector('canvas'),ctx=cv.getContext('2d');let sig='';
+ new ResizeObserver(()=>{const r=box.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;sig=''}).observe(box);
+ function draw(){
+  const d=devicePixelRatio||1,L=Lf();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,cv.width,cv.height);
+  const A=S.A,c=S.c;if(!A)return;const ts=chart.timeScale(),W=ts.width(),X=i=>ts.logicalToCoordinate(i),Y=p=>series.priceToCoordinate(p);
+  ctx.font='11px sans-serif';
+  const line=(x1,x2,y,col,w,dash,txt)=>{if(x1==null||x2==null||y==null)return;ctx.strokeStyle=col;ctx.lineWidth=w;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);if(txt){ctx.fillStyle=col;ctx.textAlign='center';ctx.fillText(txt,(x1+x2)/2,y-4)}};
+  const zone=(z,col,txt)=>{const x1=X(z.i),x2=Math.min(z.mit?X(z.end):W,W),y1=Y(z.top),y2=Y(z.bot);if(x1==null||x2==null||y1==null||y2==null||x2<0)return;
+   ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=1;ctx.fillRect(x1,y1,x2-x1,y2-y1);ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.fillStyle=col;ctx.textAlign='left';ctx.fillText(txt,Math.max(x1,0)+4,y1+11)};
+  if(L.ob)for(const q of[1,-1])A.obs.filter(o=>!o.mit&&o.d===q).slice(-3).forEach(o=>zone(o,q>0?'#2ecc9a':'#ff5d6c',(q>0?'Bull':'Bear')+' OB'));
+  if(L.fvg)for(const q of[1,-1])A.fvg.filter(o=>!o.mit&&o.d===q).slice(-4).forEach(o=>zone(o,q>0?'#4ea1ff':'#f0b429','FVG'));
+  A.ev.slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(X(e.from),X(e.to),Y(e.p),e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?1.6:1,e.k==='CHoCH'?[5,3]:[],e.k+(e.d>0?' ↑':' ↓')));
+  if(L.liq){A.liq.slice(-6).forEach(q=>line(X(q.from),q.st==='open'?W:X(q.at),Y(q.p),'#b388ff',1,[2,3],(q.t==='H'?'EQH':'EQL')+' $$$'));
+   A.sweeps.forEach(s=>{const x=X(s.at),y=Y(s.t==='H'?c[s.at].high:c[s.at].low);if(x==null||y==null)return;line(X(s.i),x,Y(s.p),'#b388ff',1,[2,3]);ctx.fillStyle='#ff7ad9';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText('X',x,s.t==='H'?y-4:y+14);ctx.font='11px sans-serif'})}
+ }
+ (function loop(){const r=chart.timeScale().getVisibleLogicalRange(),c=S.c[S.c.length-1];
+  const k=r?[r.from,r.to,c&&series.priceToCoordinate(c.high),c&&series.priceToCoordinate(c.low),cv.width].join():'';if(k!==sig){sig=k;draw()}requestAnimationFrame(loop)})();
+ const v={chart,series,force:()=>{sig=''}};V.push(v);return v;
 }
-(function loop(){const r=chart.timeScale().getVisibleLogicalRange(),c=S.c[S.c.length-1];
- const s=r?[r.from,r.to,c&&series.priceToCoordinate(c.high),c&&series.priceToCoordinate(c.low),cv.width].join():'';if(s!==sig){sig=s;draw()}requestAnimationFrame(loop)})();
+const main=view($('box'),()=>({bos:S.L.struct,ch:S.L.struct,ob:S.L.ob,fvg:S.L.fvg,liq:S.L.liq}));
+const chart=main.chart,series=main.series;
+[['ob','Order Block (OB)'],['fvg','Fair Value Gap (FVG)'],['liq','Liquidity ($$$ and sweep)'],['ch','Change of Character (CHoCH)'],['bos','Break of Structure (BOS)']].forEach(([k,t])=>{
+ const s=document.createElement('section');s.innerHTML=`<h2>${t} <small id="n_${k}" class="msg"></small></h2><div class="cbox"><div class="ch"></div><canvas></canvas></div>`;
+ $('extra').appendChild(s);view(s.querySelector('.cbox'),()=>({[k]:1}))});
+function counts(){const A=S.A,n=(k,v)=>$('n_'+k).textContent=v+' found';
+ n('ob',A.obs.filter(o=>!o.mit).length);n('fvg',A.fvg.filter(o=>!o.mit).length);n('liq',A.liq.length+A.sweeps.length);
+ n('ch',A.ev.filter(e=>e.k==='CHoCH').length);n('bos',A.ev.filter(e=>e.k==='BOS').length)}
 // data
 async function load(sym,first){
  try{const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);if(!r.ok)throw 0;
   const k=await r.json();if(!k.length)throw 0;
-  const rg=chart.timeScale().getVisibleLogicalRange();S.sym=sym;
+  S.sym=sym;
   S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}));
-  const lp=S.c[S.c.length-1].close;series.applyOptions({priceFormat:{type:'price',precision:lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,minMove:Math.pow(10,-(lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8))}});
-  series.setData(S.c);S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);S.T=SMC.setup(S.c,S.A);
-  if(first||!rg){const n=S.c.length;chart.timeScale().setVisibleLogicalRange({from:n-110,to:n+8})}else chart.timeScale().setVisibleLogicalRange(rg);
+  const lp=S.c[S.c.length-1].close,pr=lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,n=S.c.length;
+  S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);S.T=SMC.setup(S.c,S.A);
+  for(const v of V){const r=v.chart.timeScale().getVisibleLogicalRange();
+   v.series.applyOptions({priceFormat:{type:'price',precision:pr,minMove:Math.pow(10,-pr)}});v.series.setData(S.c);
+   if(first||!r)v.chart.timeScale().setVisibleLogicalRange({from:n-110,to:n+8});else v.chart.timeScale().setVisibleLogicalRange(r)}
   S.lines.forEach(l=>series.removePriceLine(l));S.lines=[];const T=S.T;
   if(T&&!T.none){const pl=(p,t,col)=>S.lines.push(series.createPriceLine({price:p,color:col,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:t}));
    pl(T.entry,'ENTRY','#f0b429');pl(T.sl,'SL','#ff5d6c');T.tps.forEach((t,i)=>pl(t.p,'TP'+(i+1),'#2ecc9a'))}
-  badge(lp);renderB();renderD();sig='';
+  badge(lp);renderB();renderD();counts();force();
  }catch(e){$('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`}
 }
 function badge(lp){$('badge').innerHTML=`${logo(S.sym,S.img)}<span>${S.sym}</span><small>${pf(lp)}</small>`}
@@ -63,7 +77,7 @@ function renderD(){const A=S.A,T=S.T,e=A.ev[A.ev.length-1],n=k=>A.ev.filter(x=>x
  $('D').innerHTML=h}
 // controls
 document.querySelectorAll('#tfbar button').forEach(b=>b.onclick=()=>{S.tf=b.dataset.tf;document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x===b));load(S.sym,1)});
-document.querySelectorAll('#tools [data-l]').forEach(b=>b.onclick=()=>{S.L[b.dataset.l]^=1;b.classList.toggle('on');sig=''});
+document.querySelectorAll('#tools [data-l]').forEach(b=>b.onclick=()=>{S.L[b.dataset.l]^=1;b.classList.toggle('on');force()});
 const zoom=f=>{const ts=chart.timeScale(),r=ts.getVisibleLogicalRange();if(r)ts.setVisibleLogicalRange({from:r.to-(r.to-r.from)*f,to:r.to})};
 $('zin').onclick=()=>zoom(.6);$('zout').onclick=()=>zoom(1.6);
 $('zfit').onclick=()=>{const n=S.c.length;chart.timeScale().setVisibleLogicalRange({from:n-110,to:n+8})};
