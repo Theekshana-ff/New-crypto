@@ -67,3 +67,14 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 #sug li{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer}
 #sug li:hover{background:var(--bg)}#sug li span{color:var(--mute);font-size:12px;margin-left:auto}
 .coin .n .lgo,.nm .lgo{width:22px;height:22px}
+.sub{margin-top:8px}.tfbar.inline{background:none;border:0;padding:0}
+.badge{display:flex;align-items:center;gap:6px;font-weight:700}.badge small{color:var(--mute);font-weight:400}
+.tools{padding:0 0 8px}.tools .sp{flex:1}
+#box{position:relative;height:440px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+#box.big{height:80vh}#cht{position:absolute;inset:0}#ov{position:absolute;inset:0;pointer-events:none}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px;margin-top:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.card h3{font-size:15px;margin-bottom:8px}.card p{margin:6px 0;font-size:14px}
+.card table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+.card td{padding:7px 4px;border-bottom:1px solid var(--line)}.card td:not(:first-child){text-align:right}
+.tag{padding:2px 8px;border-radius:6px;font-size:12px;color:#000}.tag.up{background:var(--up)}.tag.down{background:var(--down)}

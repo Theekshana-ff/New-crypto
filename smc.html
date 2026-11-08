@@ -1,4 +1,23 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SMC</title><link rel="stylesheet" href="style.css"></head>
-<body><div class="page"><a href="index.html" class="up">&larr; Home</a><h1>SMC</h1><p class="msg">This page is ready for your SMC content.</p></div></body></html>
+<title>SMC analysis</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="top">
+ <div class="row">
+  <button id="menuBtn" aria-label="Menu">&#9776;</button>
+  <form class="search" id="searchForm"><input id="q" placeholder="Search coin (BTC, LINK...)" autocomplete="off"><button>Go</button><ul id="sug"></ul></form>
+  <div class="clock"><div id="time"></div><div id="date"></div></div>
+ </div>
+ <div class="row sub"><div class="badge" id="badge"></div>
+  <div class="tfbar inline" id="tfbar"><button data-tf="1m">1m</button><button data-tf="5m">5m</button><button data-tf="15m">15m</button><button data-tf="1h" class="on">1h</button><button data-tf="4h">4h</button><button data-tf="1d">1d</button><button data-tf="1w">1w</button></div></div>
+</header>
+<div id="scrim"></div>
+<nav id="drawer"><h3>Menu</h3><a href="index.html">Home</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a><a href="patterns.html">Chart patterns</a><a href="sks.html">SKS</a><a href="links.html">Other websites</a></nav>
+<main>
+ <div class="tools tfbar inline" id="tools"><button data-l="struct" class="on">CHoCH / BOS</button><button data-l="ob" class="on">OB</button><button data-l="fvg" class="on">FVG</button><button data-l="liq" class="on">Liquidity</button><span class="sp"></span><button id="zin">＋</button><button id="zout">－</button><button id="zfit">Fit</button><button id="zbig">⛶</button></div>
+ <div id="box"><div id="cht"></div><canvas id="ov"></canvas></div>
+ <div class="two"><section class="card" id="B"></section><section class="card" id="D"></section></div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+<script src="smc-core.js"></script><script src="smc.js"></script>
+</body></html>
