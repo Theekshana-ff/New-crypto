@@ -94,3 +94,5 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 .frow input[type=number]{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:7px;border-radius:8px;font-size:14px}
 .frow input[type=color]{width:34px;height:32px;padding:0;border:1px solid var(--line);background:none;border-radius:6px}
 .frow input[type=checkbox]{width:18px;height:18px;accent-color:var(--gold)}
+.cov{display:flex;flex-wrap:wrap;gap:6px}.cv{font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;color:var(--mute)}
+.cv.on{color:#000;background:var(--gold);border-color:var(--gold);font-weight:700;cursor:pointer}
