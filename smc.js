@@ -15,7 +15,7 @@ function view(box,Lf){
  const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
  const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
  const cv=box.querySelector('canvas'),ctx=cv.getContext('2d');let sig='';
- new ResizeObserver(()=>{const r=box.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;sig=''}).observe(box);
+ new ResizeObserver(()=>{const r=box.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;cv.style.width=r.width+'px';cv.style.height=r.height+'px';sig=''}).observe(box);
  function draw(){
   const d=devicePixelRatio||1,L=Lf();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,cv.width,cv.height);
   const A=S.A,c=S.c;if(!A)return;const ts=chart.timeScale(),W=ts.width(),X=i=>ts.logicalToCoordinate(i),Y=p=>series.priceToCoordinate(p);
