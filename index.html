@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>My Crypto Desk</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="top">
+ <div class="row">
+  <button id="menuBtn" aria-label="Menu">&#9776;</button>
+  <form class="search" id="searchForm"><input id="q" list="coins" placeholder="Search coin (BTC, ETH, SOL...)" autocomplete="off"><button>Go</button></form>
+  <div class="clock"><div id="time"></div><div id="date"></div></div>
+ </div>
+ <div class="ticker" id="ticker"></div>
+</header>
+<datalist id="coins"></datalist>
+<div id="scrim"></div>
+<nav id="drawer"><h3>Menu</h3>
+ <a href="index.html">Home</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a>
+ <a href="patterns.html">Chart patterns</a><a href="sks.html">SKS</a><a href="links.html">Other websites</a>
+</nav>
+<main>
+ <h2>Today's top 4 coins</h2><div class="top4" id="top4"><div class="msg">Loading...</div></div>
+ <h2 id="chartTitle">Live chart</h2><div id="chart"></div>
+ <h2>Today's coin news</h2><div class="news" id="news"><div class="msg">Loading...</div></div>
+</main>
+<script src="https://s3.tradingview.com/tv.js"></script>
+<script src="app.js"></script>
+</body></html>
