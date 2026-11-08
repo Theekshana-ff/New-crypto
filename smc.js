@@ -14,7 +14,7 @@ const V=[],force=()=>V.forEach(v=>v.force());
 function view(box,Lf){
  const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
  const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
- const cv=box.querySelector('canvas'),ctx=cv.getContext('2d');let sig='';
+ const cv=box.lastElementChild,ctx=cv.getContext('2d');let sig='';
  new ResizeObserver(()=>{const r=box.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;cv.style.width=r.width+'px';cv.style.height=r.height+'px';sig=''}).observe(box);
  function draw(){
   const d=devicePixelRatio||1,L=Lf();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,cv.width,cv.height);
@@ -30,7 +30,7 @@ function view(box,Lf){
    A.sweeps.forEach(s=>{const x=X(s.at),y=Y(s.t==='H'?c[s.at].high:c[s.at].low);if(x==null||y==null)return;line(X(s.i),x,Y(s.p),'#b388ff',1,[2,3]);ctx.fillStyle='#ff7ad9';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText('X',x,s.t==='H'?y-4:y+14);ctx.font='11px sans-serif'})}
  }
  (function loop(){const r=chart.timeScale().getVisibleLogicalRange(),c=S.c[S.c.length-1];
-  const k=r?[r.from,r.to,c&&series.priceToCoordinate(c.high),c&&series.priceToCoordinate(c.low),cv.width].join():'';if(k!==sig){sig=k;draw()}requestAnimationFrame(loop)})();
+  const k=r?[r.from,r.to,c&&series.priceToCoordinate(c.high),c&&series.priceToCoordinate(c.low),cv.width].join():'';requestAnimationFrame(loop);if(k!==sig){sig=k;try{draw()}catch(e){console.error(e);$('err').textContent='Draw error: '+e.message}}})();
  const v={chart,series,force:()=>{sig=''}};V.push(v);return v;
 }
 const main=view($('box'),()=>({bos:S.L.struct,ch:S.L.struct,ob:S.L.ob,fvg:S.L.fvg,liq:S.L.liq}));
