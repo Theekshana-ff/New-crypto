@@ -47,3 +47,23 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 .tfbar button.on{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
 .news a{display:flex;gap:12px;align-items:center}
 .news img,.news .ph{width:96px;height:64px;object-fit:cover;border-radius:8px;flex:none;background:linear-gradient(135deg,var(--line),var(--bg))}
+.coin .n{display:flex;align-items:center;gap:6px}
+.coin img,#mkt img{width:22px;height:22px;border-radius:50%}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+#mkt{border-collapse:collapse;width:100%;min-width:720px;font-size:13px;font-variant-numeric:tabular-nums}
+#mkt th,#mkt td{padding:10px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+#mkt th{color:var(--mute);font-weight:600;background:var(--panel)}
+#mkt th:nth-child(2),#mkt td.nm{text-align:left}
+#mkt td.nm{position:sticky;left:0;background:var(--bg);display:flex;align-items:center;gap:8px;min-width:170px}
+#mkt td.nm span{color:var(--mute);font-size:12px}
+#mkt tbody tr{cursor:pointer}#mkt tbody tr:hover td{background:var(--panel)}
+.moreBtn{display:block;margin:12px auto;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:9px 20px;cursor:pointer}
+.lgo,.lg{width:20px;height:20px;border-radius:50%;flex:none;vertical-align:middle}
+.lg{display:inline-flex;align-items:center;justify-content:center;background:var(--gold);color:#000;font:700 11px/1 sans-serif}
+.ticker span{display:inline-flex;align-items:center;gap:5px}.ticker .lgo,.ticker .lg{width:16px;height:16px}
+.search{position:relative}
+#sug{list-style:none;padding:0;position:absolute;top:100%;left:0;right:0;margin-top:4px;background:var(--panel);border:1px solid var(--line);border-radius:10px;overflow:hidden;z-index:40}
+#sug:empty{display:none}
+#sug li{display:flex;align-items:center;gap:8px;padding:10px 12px;cursor:pointer}
+#sug li:hover{background:var(--bg)}#sug li span{color:var(--mute);font-size:12px;margin-left:auto}
+.coin .n .lgo,.nm .lgo{width:22px;height:22px}
