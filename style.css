@@ -86,3 +86,6 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 .rin input{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:8px;font-size:15px}
 .x{background:none;border:0;color:var(--mute);cursor:pointer;font-size:16px}
 .card .moreBtn{margin:10px 0 0}
+.grade{padding:2px 8px;border-radius:6px;font-weight:700;color:#000;font-size:12px}
+.tools select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
+.sc{cursor:pointer}.sc:hover td{background:var(--bg)}

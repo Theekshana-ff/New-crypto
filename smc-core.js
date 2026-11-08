@@ -77,8 +77,12 @@ function topDown(D){
  items.push({tf:'1H',ok:near,label:'Order Block',detail:ob?`${dir>0?'Bullish':'Bearish'} OB ${ob.bot.toPrecision(6)} – ${ob.top.toPrecision(6)} · ${near?'price at zone':'waiting for pullback'}`:'No unmitigated OB in bias direction'});
  const c15=D['15m'],A15=analyze(c15,5),e=dir?A15.ev.filter(x=>x.d===dir&&ago(c15,x.to)<=24).pop():null;
  items.push({tf:'15M',ok:!!e,label:'MSS / entry trigger',detail:e?`${e.k} ${e.d>0?'↑':'↓'} ${ago(c15,e.to)} bars ago`:'No structure shift in bias direction yet'});
- return{dir,items,score:items.filter(i=>i.ok).length};
+ return{dir,items,score:items.filter(i=>i.ok).length,setup:setup(c1,A1h)};
 }
+// Setup quality: confluence, sweep, premium/discount, zone type, top-down alignment (max 10)
+function grade(T,td){if(!T||T.none)return null;
+ const al=!!td&&td.dir===T.d,pts=(T.conf?2:0)+(T.sweep?2:0)+(T.pd?1:0)+(T.src==='Order Block'?1:0)+(al?td.score:0);
+ return{g:pts>=8?'A+':pts>=6?'A':pts>=4?'B':'C',pts,max:10,aligned:al}}
 // Status of a saved setup, c = candles after it was saved
 function evalSaved(s,c){
  const long=s.d===1;let st='pending',hit=0;
@@ -107,5 +111,5 @@ function backtest(c,step=4){
  return{setups:seen.size,filled:res.length,resolved:rs.length,wins:w.length,tp2:rs.filter(r=>r.hit>=2).length,tp3:rs.filter(r=>r.hit>=3).length,
   losses:rs.length-w.length,exp:rs.length?(w.reduce((a,r)=>a+r.rr,0)-(rs.length-w.length))/rs.length:0,strongN:st.length,strongWin:sw.length};
 }
-root.SMC={analyze,setup,topDown,evalSaved,backtest};if(typeof module!=='undefined')module.exports=root.SMC;
+root.SMC={analyze,setup,topDown,grade,evalSaved,backtest};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
