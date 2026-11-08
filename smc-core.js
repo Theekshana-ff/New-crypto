@@ -35,13 +35,25 @@ function analyze(c,L=4){
  for(const t of ['H','L']){const ps=piv.filter(p=>p.t===t&&p.st!=='broke');
   for(let a=0;a<ps.length;a++)for(let b=a+1;b<ps.length;b++)if(Math.abs(ps[a].p-ps[b].p)<atr*0.25&&ps[b].i-ps[a].i>=3){
    liq.push({t,p:t==='H'?Math.max(ps[a].p,ps[b].p):Math.min(ps[a].p,ps[b].p),from:ps[a].i,st:ps[b].st,at:ps[b].at});break}}
- return{atr,piv,ev,obs,fvg,liq,trend,sweeps:piv.filter(p=>p.st==='sweep').slice(-5)};
+ // OB + FVG confluence
+ for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===o.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
+ // IDM (inducement): last minor pullback inside the leg that made each break
+ const p2=[];for(let i=2;i<n-2;i++){if([-2,-1,1,2].every(k=>c[i].high>c[i+k].high))p2.push({t:'H',i,p:c[i].high});if([-2,-1,1,2].every(k=>c[i].low<c[i+k].low))p2.push({t:'L',i,p:c[i].low})}
+ const idm=[];
+ for(const e of ev.slice(-6)){const q=p2.filter(p=>p.t===(e.d===1?'L':'H')&&p.i>e.from&&p.i<e.to).pop();if(!q)continue;
+  let to=e.to;for(let j=q.i+1;j<=e.to;j++)if(e.d===1?c[j].low<q.p:c[j].high>q.p){to=j;break}
+  idm.push({d:e.d,p:q.p,i:q.i,to:Math.max(to,q.i+1)})}
+ const w=c.slice(-100),hh=Math.max(...w.map(x=>x.high)),ll=Math.min(...w.map(x=>x.low));
+ const sweepsAll=piv.filter(p=>p.st==='sweep');
+ return{atr,piv,ev,obs,fvg,liq,idm,trend,range:{hh,ll,eq:(hh+ll)/2},sweepsAll,sweeps:sweepsAll.slice(-5)};
 }
 function setup(c,A){
  const last=c[c.length-1].close,d=A.trend;if(!d)return null;
- let z=A.obs.filter(o=>!o.mit&&o.d===d&&(d===1?o.bot<last:o.top>last)).pop(),src='Order Block';
- if(!z){z=A.fvg.filter(f=>!f.mit&&f.d===d&&(d===1?f.bot<last:f.top>last)).pop();src='FVG'}
- if(!z)return{d,none:1};
+ const side=z=>d===1?z.bot<last:z.top>last,pd=z=>d===1?(z.top+z.bot)/2<=A.range.eq:(z.top+z.bot)/2>=A.range.eq;
+ const ob=A.obs.filter(o=>!o.mit&&o.d===d&&side(o)),fg=A.fvg.filter(f=>!f.mit&&f.d===d&&side(f));
+ const t=[ob.filter(o=>o.conf&&pd(o)),ob.filter(pd),ob.filter(o=>o.conf),ob,fg.filter(pd),fg].find(x=>x.length);
+ if(!t)return{d,none:1};
+ const z=t[t.length-1],src=z.k?'Order Block':'FVG';
  const entry=(z.top+z.bot)/2,sl=d===1?z.bot-A.atr*0.25:z.top+A.atr*0.25,risk=Math.abs(entry-sl);
  const lv=A.piv.filter(p=>p.st==='open'&&(d===1?p.t==='H'&&p.p>entry:p.t==='L'&&p.p<entry)).map(p=>p.p).sort((a,b)=>d*(a-b));
  const tps=[];
@@ -50,8 +62,50 @@ function setup(c,A){
  for(const m of [1.5,3,4.5]){if(tps.length>=3)break;
   const p=entry+d*risk*m,prev=tps.length?tps[tps.length-1].p:entry;
   if(d*(p-prev)>risk*0.4)tps.push({p,s:'RR'})}
- tps.forEach(t=>t.rr=Math.abs(t.p-entry)/risk);
- return{d,src,z,entry,sl,tps,last,inside:last<=z.top&&last>=z.bot};
+ tps.forEach(x=>x.rr=Math.abs(x.p-entry)/risk);
+ const sw=A.sweepsAll.filter(x=>x.t===(d===1?'L':'H')&&x.at>=z.i-15).pop();
+ return{d,src,z,entry,sl,tps,last,inside:last<=z.top&&last>=z.bot,conf:!!z.conf,pd:pd(z),sweep:!!sw,sweepAgo:sw?c.length-1-sw.at:0};
 }
-root.SMC={analyze,setup};if(typeof module!=='undefined')module.exports=root.SMC;
+// Top-down: daily bias -> 4H sweep -> 1H OB -> 15M MSS
+function topDown(D){
+ const ago=(c,i)=>c.length-1-i,A1=analyze(D['1d']),dir=A1.trend,items=[],e1=A1.ev[A1.ev.length-1];
+ items.push({tf:'1D',ok:!!dir,label:'Daily bias',detail:dir?`${dir>0?'Bullish':'Bearish'} · last ${e1.k} ${e1.d>0?'↑':'↓'}`:'No clear structure'});
+ const c4=D['4h'],A4=analyze(c4),s4=dir?A4.sweepsAll.filter(s=>s.t===(dir>0?'L':'H')&&ago(c4,s.at)<=30).pop():null;
+ items.push({tf:'4H',ok:!!s4,label:'Liquidity sweep',detail:s4?`${dir>0?'Sell-side':'Buy-side'} liquidity swept ${ago(c4,s4.at)} bars ago`:'No recent sweep in bias direction (last 30 bars)'});
+ const c1=D['1h'],A1h=analyze(c1),last=c1[c1.length-1].close,ob=dir?A1h.obs.filter(o=>!o.mit&&o.d===dir).pop():null;
+ const near=!!ob&&(dir>0?last<=ob.top*1.003:last>=ob.bot*0.997);
+ items.push({tf:'1H',ok:near,label:'Order Block',detail:ob?`${dir>0?'Bullish':'Bearish'} OB ${ob.bot.toPrecision(6)} – ${ob.top.toPrecision(6)} · ${near?'price at zone':'waiting for pullback'}`:'No unmitigated OB in bias direction'});
+ const c15=D['15m'],A15=analyze(c15,5),e=dir?A15.ev.filter(x=>x.d===dir&&ago(c15,x.to)<=24).pop():null;
+ items.push({tf:'15M',ok:!!e,label:'MSS / entry trigger',detail:e?`${e.k} ${e.d>0?'↑':'↓'} ${ago(c15,e.to)} bars ago`:'No structure shift in bias direction yet'});
+ return{dir,items,score:items.filter(i=>i.ok).length};
+}
+// Status of a saved setup, c = candles after it was saved
+function evalSaved(s,c){
+ const long=s.d===1;let st='pending',hit=0;
+ for(const k of c){const lo=k.low,hi=k.high,en=long?lo<=s.entry:hi>=s.entry,slh=long?lo<=s.sl:hi>=s.sl;
+  if(st==='pending'){if(en){st='entered';if(slh){st='sl';break}continue}
+   if(long?hi>=s.tps[0]:lo<=s.tps[0]){st='missed';break}}
+  else{if(slh){st='sl';break}s.tps.forEach((p,i)=>{if(long?hi>=p:lo<=p)hit=Math.max(hit,i+1)})}}
+ if(hit&&st==='entered')st='tp';
+ return{st,hit};
+}
+// Walk-forward backtest of the same setup logic (no look-ahead)
+function backtest(c,step=4){
+ const seen=new Set(),res=[];
+ for(let t=150;t<c.length-5;t+=step){
+  const sl=c.slice(0,t+1),A=analyze(sl),S=setup(sl,A);
+  if(!S||S.none)continue;const key=S.d+'_'+S.z.i;if(seen.has(key))continue;seen.add(key);
+  const long=S.d===1;let fill=-1,out=null,hit=0;
+  for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high,slh=long?lo<=S.sl:hi>=S.sl;
+   if(fill<0){if(j>t+60)break;
+    if(long?lo<=S.entry:hi>=S.entry){fill=j;if(slh){out='sl';break}}
+    else if(long?hi>=S.tps[0].p:lo<=S.tps[0].p)break}
+   else{if(slh){out='sl';break}S.tps.forEach((q,i)=>{if(long?hi>=q.p:lo<=q.p)hit=Math.max(hit,i+1)});if(hit===3)break}}
+  if(fill>=0)res.push({hit,sl:out==='sl'?1:0,rr:S.tps[0].rr,strong:S.conf});
+ }
+ const rs=res.filter(r=>r.hit>=1||r.sl),w=rs.filter(r=>r.hit>=1),st=rs.filter(r=>r.strong),sw=st.filter(r=>r.hit>=1);
+ return{setups:seen.size,filled:res.length,resolved:rs.length,wins:w.length,tp2:rs.filter(r=>r.hit>=2).length,tp3:rs.filter(r=>r.hit>=3).length,
+  losses:rs.length-w.length,exp:rs.length?(w.reduce((a,r)=>a+r.rr,0)-(rs.length-w.length))/rs.length:0,strongN:st.length,strongWin:sw.length};
+}
+root.SMC={analyze,setup,topDown,evalSaved,backtest};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
