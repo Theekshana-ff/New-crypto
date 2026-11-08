@@ -89,3 +89,8 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 .grade{padding:2px 8px;border-radius:6px;font-weight:700;color:#000;font-size:12px}
 .tools select{background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:6px 8px}
 .sc{cursor:pointer}.sc:hover td{background:var(--bg)}
+#fcfg{margin-bottom:10px}#fcfg[hidden]{display:none}
+#fgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.frow{display:flex;gap:6px;align-items:center}
+.frow input[type=number]{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:7px;border-radius:8px;font-size:14px}
+.frow input[type=color]{width:34px;height:32px;padding:0;border:1px solid var(--line);background:none;border-radius:6px}
+.frow input[type=checkbox]{width:18px;height:18px;accent-color:var(--gold)}
