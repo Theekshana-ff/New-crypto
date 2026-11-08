@@ -94,11 +94,11 @@ function evalSaved(s,c){
  return{st,hit};
 }
 // Walk-forward backtest of the same setup logic (no look-ahead)
-function backtest(c,step=4){
+function backtest(c,step=4,gen){
  const seen=new Set(),res=[];
  for(let t=150;t<c.length-5;t+=step){
-  const sl=c.slice(0,t+1),A=analyze(sl),S=setup(sl,A);
-  if(!S||S.none)continue;const key=S.d+'_'+S.z.i;if(seen.has(key))continue;seen.add(key);
+  const sl=c.slice(0,t+1),A=analyze(sl),S=gen?gen(sl,A):setup(sl,A);
+  if(!S||S.none)continue;const key=S.key||(S.d+'_'+S.z.i);if(seen.has(key))continue;seen.add(key);
   const long=S.d===1;let fill=-1,out=null,hit=0;
   for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high,slh=long?lo<=S.sl:hi>=S.sl;
    if(fill<0){if(j>t+60)break;

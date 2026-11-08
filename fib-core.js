@@ -1,8 +1,9 @@
 (function(root){
-// TradingView-style defaults (settings picture): 0, 0.5, 0.62, 1 on; others available
 const COL={0:'#8a9bb0',0.25:'#8a9bb0',0.382:'#6ea8ff',0.5:'#e6edf3',0.62:'#f0b429',0.702:'#ff9f43',0.79:'#f0b429',1:'#8a9bb0'};
 const DEF={zone:[0.5,0.62],levels:[0,0.25,0.382,0.5,0.62,0.702,0.79,1,-0.28,-0.62,4.236,1.272,1.414,2.272,2.414,2].map(r=>({r,on:[0,0.5,0.62,1].includes(r),col:COL[r]||(r<0?'#2ecc9a':'#b388ff')}))};
-// swing leg: uptrend = swing low -> swing high, downtrend = swing high -> swing low
+const CL=[0.382,0.5,0.62,0.79];
+const zigzag=A=>{const z=[];for(const p of A.piv){const l=z[z.length-1];if(l&&l.t===p.t){if(p.t==='H'?p.p>l.p:p.p<l.p)z[z.length-1]=p}else z.push(p)}return z};
+const levelPrices=(g,rs)=>{const R=Math.abs(g.b.p-g.a.p);return rs.map(r=>({r,p:g.d>0?g.b.p-r*R:g.b.p+r*R}))};
 function leg(c,A){
  const H=A.piv.filter(p=>p.t==='H'),L=A.piv.filter(p=>p.t==='L');if(!H.length||!L.length)return null;
  const up=l=>{let b={i:l.i,p:c[l.i].high};for(let j=l.i;j<c.length;j++)if(c[j].high>=b.p)b={i:j,p:c[j].high};return{d:1,a:{i:l.i,p:l.p},b}};
@@ -12,15 +13,32 @@ function leg(c,A){
  if(A.trend<0){const h=H.filter(p=>p.i<ll.i).pop();if(h)return dn(h)}
  return ll.i<lh.i?up(ll):dn(lh);
 }
-function fib(c,A,cfg){
- cfg=cfg||DEF;const g=leg(c,A);if(!g)return null;const{d,a,b}=g,R=Math.abs(b.p-a.p),last=c[c.length-1].close;if(!(R>0))return null;
+function prevLeg(A,g){const z=zigzag(A),k=z.findIndex(p=>p.i===g.a.i);if(k<2||z[k-2].t!==z[k].t)return null;return{d:g.d,a:{i:z[k-2].i,p:z[k-2].p},b:{i:z[k-1].i,p:z[k-1].p}}}
+// ov = manual leg override, extra = other legs' levels [{name,levels:[{r,p}]}] for cluster detection
+function fib(c,A,cfg,ov,extra){
+ cfg=cfg||DEF;const g=ov||leg(c,A);if(!g)return null;const{d,a,b}=g,R=Math.abs(b.p-a.p),last=c[c.length-1].close;if(!(R>0))return null;
  const pr=r=>d>0?b.p-r*R:b.p+r*R,z0=pr(cfg.zone[0]),z1=pr(cfg.zone[1]);
  const levels=cfg.levels.filter(l=>l.on).map(l=>({r:l.r,p:pr(l.r),col:l.col}));
  const zone={lo:Math.min(z0,z1),hi:Math.max(z0,z1)},entry=(z0+z1)/2,sl=d>0?a.p-A.atr*0.25:a.p+A.atr*0.25,risk=Math.abs(entry-sl);
  const tps=[pr(0),pr(-0.28),pr(-0.62)].map(p=>({p,rr:Math.abs(p-entry)/risk}));
  const state=last>zone.hi?'above':last<zone.lo?'below':'inside',broken=d>0?last<a.p:last>a.p;
  const conf=[...A.obs.filter(o=>!o.mit&&o.d===d).map(o=>({t:'OB',o})),...A.fvg.filter(f=>!f.mit&&f.d===d).map(o=>({t:'FVG',o}))].filter(x=>x.o.bot<zone.hi&&x.o.top>zone.lo).map(x=>x.t);
- return{d,leg:g,R,levels,zone,zr:cfg.zone,entry,sl,tps,last,state,broken,conf:[...new Set(conf)],small:R<A.atr*3};
+ const pl=ov?null:prevLeg(A,g),oth=[...(extra||[]),...(pl?[{name:'prev leg',levels:levelPrices(pl,CL)}]:[])],clusters=[];
+ for(const m of levelPrices(g,CL))for(const o of oth){if(o.levels.some(x=>Math.abs(x.p-m.p)<A.atr*0.3)){clusters.push({r:m.r,p:m.p,with:o.name});break}}
+ return{d,leg:g,R,levels,zone,zr:cfg.zone,entry,sl,tps,last,state,broken,conf:[...new Set(conf)],small:R<A.atr*3,aligned:A.trend===d,clusters,
+  clusterInZone:clusters.some(x=>x.p>=zone.lo-A.atr*0.1&&x.p<=zone.hi+A.atr*0.1)};
 }
-root.FIB={fib,DEF};if(typeof module!=='undefined')module.exports=root.FIB;
+// history: after price retraced at least to a level, how often did it make a new extreme before breaking the leg start
+function reactions(c,A,d){
+ const z=zigzag(A),out={0.5:{n:0,ok:0},0.62:{n:0,ok:0},0.79:{n:0,ok:0}};
+ for(let k=0;k+2<z.length;k++){const a=z[k],b=z[k+1],e=z[k+2];if((d>0)!==(a.t==='L'))continue;
+  const R=Math.abs(b.p-a.p);if(R<A.atr*3)continue;const pr=r=>d>0?b.p-r*R:b.p+r*R;
+  let res=0;for(let j=e.i;j<Math.min(c.length,e.i+150);j++){if(d>0?c[j].low<a.p:c[j].high>a.p){res=-1;break}if(d>0?c[j].high>b.p:c[j].low<b.p){res=1;break}}
+  if(!res)continue;
+  for(const r of[0.5,0.62,0.79])if(d>0?e.p<=pr(r):e.p>=pr(r)){out[r].n++;if(res>0)out[r].ok++}}
+ return out}
+function grade(F,rx){if(!F)return null;const r=rx&&rx[0.62],good=!!r&&r.n>=4&&r.ok/r.n>=0.6;
+ const pts=(F.conf.length?2:0)+(F.state==='inside'?2:0)+(F.aligned?2:0)+(F.broken?0:1)+(F.small?0:1)+(F.clusterInZone?1:0)+(good?1:0);
+ return{g:pts>=8?'A+':pts>=6?'A':pts>=4?'B':'C',pts,max:10}}
+root.FIB={fib,DEF,CL,levelPrices,reactions,grade};if(typeof module!=='undefined')module.exports=root.FIB;
 })(typeof window!=='undefined'?window:globalThis);
