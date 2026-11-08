@@ -34,3 +34,16 @@ h2{font-size:16px;margin:14px 0 8px}
 .page{max-width:700px;margin:40px auto;padding:0 16px}
 .page h1{margin-bottom:8px}
 @media(max-width:600px){#chart{height:420px}}
+.tf,.tabs{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap}
+.tabs{margin:0 0 10px}
+.tf button,.tabs button{background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer;font:inherit}
+.tf button.on,.tabs button.on{background:var(--gold);color:#111;border-color:var(--gold);font-weight:700}
+.news a{display:flex;gap:12px;align-items:center}
+.news img,.news .ph{width:96px;height:64px;border-radius:8px;object-fit:cover;flex:none;background:var(--line)}
+.news .ph{display:grid;place-items:center;font-size:24px;color:var(--gold);font-weight:700}
+.tfbar{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line)}
+main .tfbar{background:none;border:0;padding:0 0 8px}
+.tfbar button{background:var(--bg);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 12px;cursor:pointer}
+.tfbar button.on{background:var(--gold);color:#000;border-color:var(--gold);font-weight:700}
+.news a{display:flex;gap:12px;align-items:center}
+.news img,.news .ph{width:96px;height:64px;object-fit:cover;border-radius:8px;flex:none;background:linear-gradient(135deg,var(--line),var(--bg))}

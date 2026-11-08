@@ -9,8 +9,10 @@
   <form class="search" id="searchForm"><input id="q" list="coins" placeholder="Search coin (BTC, ETH, SOL...)" autocomplete="off"><button>Go</button></form>
   <div class="clock"><div id="time"></div><div id="date"></div></div>
  </div>
+ <div class="tf" id="tf"><button data-i="1">1m</button><button data-i="15">15m</button><button data-i="60" class="on">1h</button><button data-i="240">4h</button><button data-i="D">1d</button></div>
  <div class="ticker" id="ticker"></div>
 </header>
+<div class="tfbar" id="tfbar"><button data-tf="1">1m</button><button data-tf="5">5m</button><button data-tf="15">15m</button><button data-tf="60" class="on">1h</button><button data-tf="240">4h</button><button data-tf="D">1d</button><button data-tf="W">1w</button></div>
 <datalist id="coins"></datalist>
 <div id="scrim"></div>
 <nav id="drawer"><h3>Menu</h3>
@@ -20,7 +22,7 @@
 <main>
  <h2>Today's top 4 coins</h2><div class="top4" id="top4"><div class="msg">Loading...</div></div>
  <h2 id="chartTitle">Live chart</h2><div id="chart"></div>
- <h2>Today's coin news</h2><div class="news" id="news"><div class="msg">Loading...</div></div>
+ <h2>Today's coin news</h2><div class="tfbar" id="srcbar"></div><div class="tabs" id="tabs"><button data-s="all" class="on">All</button><button data-s="CoinDesk">CoinDesk</button><button data-s="Cointelegraph">Cointelegraph</button><button data-s="CryptoPanic">CryptoPanic</button></div><div class="news" id="news"><div class="msg">Loading...</div></div>
 </main>
 <script src="https://s3.tradingview.com/tv.js"></script>
 <script src="app.js"></script>
