@@ -14,29 +14,34 @@ const V=[],force=()=>V.forEach(v=>v.force());
 function view(box,Lf){
  const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
  const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
- const cv=box.lastElementChild,ctx=cv.getContext('2d');let sig='';
- new ResizeObserver(()=>{const r=box.getBoundingClientRect(),d=devicePixelRatio||1;cv.width=r.width*d;cv.height=r.height*d;cv.style.width=r.width+'px';cv.style.height=r.height+'px';sig=''}).observe(box);
- function draw(){
-  const d=devicePixelRatio||1,L=Lf();ctx.setTransform(d,0,0,d,0,0);ctx.clearRect(0,0,cv.width,cv.height);
-  const A=S.A,c=S.c;if(!A)return;const ts=chart.timeScale(),W=ts.width(),X=i=>ts.logicalToCoordinate(i),Y=p=>series.priceToCoordinate(p);
-  ctx.font='11px sans-serif';
-  const line=(x1,x2,y,col,w,dash,txt)=>{if(x1==null||x2==null||y==null)return;ctx.strokeStyle=col;ctx.lineWidth=w;ctx.setLineDash(dash);ctx.beginPath();ctx.moveTo(x1,y);ctx.lineTo(x2,y);ctx.stroke();ctx.setLineDash([]);if(txt){ctx.fillStyle=col;ctx.textAlign='center';ctx.fillText(txt,(x1+x2)/2,y-4)}};
-  const zone=(z,col,txt)=>{const x1=X(z.i),x2=Math.min(z.mit?X(z.end):W,W),y1=Y(z.top),y2=Y(z.bot);if(x1==null||x2==null||y1==null||y2==null||x2<0)return;
-   ctx.fillStyle=col+'33';ctx.strokeStyle=col;ctx.lineWidth=1;ctx.fillRect(x1,y1,x2-x1,y2-y1);ctx.strokeRect(x1,y1,x2-x1,y2-y1);ctx.fillStyle=col;ctx.textAlign='left';ctx.fillText(txt,Math.max(x1,0)+4,y1+11)};
-  if(L.ob)for(const q of[1,-1])A.obs.filter(o=>!o.mit&&o.d===q).slice(-3).forEach(o=>zone(o,q>0?'#2ecc9a':'#ff5d6c',(q>0?'Bull':'Bear')+' OB'));
-  if(L.fvg)for(const q of[1,-1])A.fvg.filter(o=>!o.mit&&o.d===q).slice(-4).forEach(o=>zone(o,q>0?'#4ea1ff':'#f0b429','FVG'));
-  A.ev.slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(X(e.from),X(e.to),Y(e.p),e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?1.6:1,e.k==='CHoCH'?[5,3]:[],e.k+(e.d>0?' ↑':' ↓')));
-  if(L.liq){A.liq.slice(-6).forEach(q=>line(X(q.from),q.st==='open'?W:X(q.at),Y(q.p),'#b388ff',1,[2,3],(q.t==='H'?'EQH':'EQL')+' $$$'));
-   A.sweeps.forEach(s=>{const x=X(s.at),y=Y(s.t==='H'?c[s.at].high:c[s.at].low);if(x==null||y==null)return;line(X(s.i),x,Y(s.p),'#b388ff',1,[2,3]);ctx.fillStyle='#ff7ad9';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText('X',x,s.t==='H'?y-4:y+14);ctx.font='11px sans-serif'})}
+ const made=[],none={autoscaleInfoProvider:()=>null,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false};
+ // everything is drawn with native chart series (zones = filled baseline series, lines = line series)
+ function render(){
+  try{
+   made.forEach(m=>chart.removeSeries(m));made.length=0;series.setMarkers([]);$('err').textContent='';
+   const L=Lf(),A=S.A,c=S.c;if(!A||!c.length)return;const last=c.length-1,marks=[],T=i=>c[Math.max(0,Math.min(last,i))].time;
+   const zone=(z,col,txt)=>{let e=z.mit?z.end:last;if(e<=z.i)e=Math.min(last,z.i+1);if(e<=z.i)return;
+    const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'66',topFillColor2:col+'66',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
+    s.setData([{time:T(z.i),value:z.top},{time:T(e),value:z.top}]);
+    s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);made.push(s)};
+   const line=(i1,i2,p,col,w,st,txt)=>{if(i2<=i1)return;const m=Math.round((i1+i2)/2),idx=[...new Set([i1,m,i2])];
+    const s=chart.addLineSeries({...none,color:col,lineWidth:w,lineStyle:st});
+    s.setData(idx.map(i=>({time:T(i),value:p})));
+    if(txt)s.setMarkers([{time:T(m),position:'aboveBar',shape:'circle',size:0,color:col,text:txt}]);made.push(s)};
+   if(L.ob)for(const q of[1,-1])A.obs.filter(o=>!o.mit&&o.d===q).slice(-3).forEach(o=>zone(o,q>0?'#2ecc9a':'#ff5d6c',(q>0?'Bull':'Bear')+' OB'));
+   if(L.fvg)for(const q of[1,-1])A.fvg.filter(o=>!o.mit&&o.d===q).slice(-4).forEach(o=>zone(o,q>0?'#4ea1ff':'#f0b429','FVG'));
+   A.ev.slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(e.from,e.to,e.p,e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?2:1,e.k==='CHoCH'?2:0,e.k+(e.d>0?' ↑':' ↓')));
+   if(L.liq){A.liq.slice(-6).forEach(q=>line(q.from,q.st==='open'?last:q.at,q.p,'#b388ff',1,1,(q.t==='H'?'EQH':'EQL')+' $$$'));
+    A.sweeps.forEach(s=>{line(s.i,s.at,s.p,'#b388ff',1,1,'');marks.push({time:T(s.at),position:s.t==='H'?'aboveBar':'belowBar',color:'#ff7ad9',shape:'circle',size:0,text:'X'})})}
+   series.setMarkers(marks.sort((x,y)=>x.time-y.time));
+  }catch(e){console.error(e);$('err').textContent='Draw error: '+e.message}
  }
- (function loop(){const r=chart.timeScale().getVisibleLogicalRange(),c=S.c[S.c.length-1];
-  const k=r?[r.from,r.to,c&&series.priceToCoordinate(c.high),c&&series.priceToCoordinate(c.low),cv.width].join():'';requestAnimationFrame(loop);if(k!==sig){sig=k;try{draw()}catch(e){console.error(e);$('err').textContent='Draw error: '+e.message}}})();
- const v={chart,series,force:()=>{sig=''}};V.push(v);return v;
+ const v={chart,series,force:render};V.push(v);return v;
 }
 const main=view($('box'),()=>({bos:S.L.struct,ch:S.L.struct,ob:S.L.ob,fvg:S.L.fvg,liq:S.L.liq}));
 const chart=main.chart,series=main.series;
 [['ob','Order Block (OB)'],['fvg','Fair Value Gap (FVG)'],['liq','Liquidity ($$$ and sweep)'],['ch','Change of Character (CHoCH)'],['bos','Break of Structure (BOS)']].forEach(([k,t])=>{
- const s=document.createElement('section');s.innerHTML=`<h2>${t} <small id="n_${k}" class="msg"></small></h2><div class="cbox"><div class="ch"></div><canvas></canvas></div>`;
+ const s=document.createElement('section');s.innerHTML=`<h2>${t} <small id="n_${k}" class="msg"></small></h2><div class="cbox"><div class="ch"></div></div>`;
  $('extra').appendChild(s);view(s.querySelector('.cbox'),()=>({[k]:1}))});
 function counts(){const A=S.A,n=(k,v)=>$('n_'+k).textContent=v+' found';
  n('ob',A.obs.filter(o=>!o.mit).length);n('fvg',A.fvg.filter(o=>!o.mit).length);n('liq',A.liq.length+A.sweeps.length);
