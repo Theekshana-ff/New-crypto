@@ -82,7 +82,7 @@ function renderB(){const L=list();let h='<h3>Detected patterns</h3>';
 function renderD(){const p=cur();let h='<h3>විස්තරය</h3>';if(!p){$('D').innerHTML=h+'<p class="msg">Pattern එකක් තෝරන්න.</p>';return}
  h+=`<p><b>${p.names.join(' / ')}</b> · <span class="${p.bias==='bull'?'up':p.bias==='bear'?'down':''}">${p.status}</span></p><p>${descOf(p)}</p>`;
  if(p.dir){const last=S.c[S.c.length-1].close,row=(n,v,col,x)=>`<tr><td style="color:${col}">${n}</td><td>${pf(v)}</td><td>${x}</td></tr>`;
-  h+=`<p><span class="tag ${p.dir>0?'up':'down'}">${p.dir>0?'LONG':'SHORT'}</span> <span class="msg">breakout entry</span></p><table>`+row('Entry',p.entry,'#f0b429',pp(last,p.entry)+' away')+row('SL',p.sl,'#ff5d6c',pp(p.sl,p.entry))+p.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+`</table><p class="msg">TP = pattern උසේ 0.5 / 1.0 / 1.618 ගුණය. ${/breakout|breakdown/.test(p.status)?'Breakout එක දැනටමත් වෙලා, retest එකක් එනකම් බලන්න.':'Breakout එක තහවුරු වෙනකම් (candle close) ඉන්න.'}</p><button id="saveBtn" class="moreBtn">Save setup</button>`}
+  h+=`<p><span class="tag ${p.dir>0?'up':'down'}">${p.dir>0?'LONG':'SHORT'}</span> <span class="msg">breakout entry</span></p><table>`+row('Entry',p.entry,'#f0b429',pp(last,p.entry)+' away')+row('SL',p.sl,'#ff5d6c',pp(p.sl,p.entry))+p.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+`</table><p class="msg">TP = pattern උසේ 0.5 / 1.0 / 1.618 ගුණය. ${/breakout|breakdown/.test(p.status)?'Breakout එක දැනටමත් වෙලා, retest එකක් එනකම් බලන්න.':'Breakout එක තහවුරු වෙනකම් (candle close) ඉන්න.'}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  else h+='<p class="msg">මේ pattern එකට breakout setup එකක් නෑ. කැඩෙන පැත්ත බලලා ඊට පස්සේ trade කරන්න.</p>';
  h+='<p class="msg">Auto analysis එකක් විතරයි, financial advice නෙවෙයි. Pattern හඳුනාගැනීම සමහර වෙලාවට වැරදෙන්න පුළුවන්.</p>';
  $('D').innerHTML=h;
@@ -115,3 +115,10 @@ let t;$('q').oninput=()=>{clearTimeout(t);const v=$('q').value.trim();if(v.lengt
   document.querySelectorAll('#sug li').forEach(l=>l.onmousedown=l.ontouchstart=e=>{e.preventDefault();$('q').value=l.dataset.s;$('sug').innerHTML='';S.img=l.dataset.i;load(l.dataset.s,1)})}catch(e){}},350)};
 $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
 renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
+
+window.getSetup=()=>{const p=cur();return p&&p.dir?{sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),src:p.names[0],price:S.c[S.c.length-1].close}:null};
+
+Alerts.mount($('ALP'),$('alBtn'));
+Alerts.init('Patterns',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,+$('sw').value),last=c[c.length-1].close;
+ return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
+  text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${p.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}))});

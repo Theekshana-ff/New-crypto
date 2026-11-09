@@ -76,7 +76,7 @@ function renderB(){const T=S.T;let h='<h3>Trade setup (auto)</h3>';
   h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'LONG':'SHORT'}</span> <span class="msg">from ${T.d>0?'Bullish':'Bearish'} ${T.src}${T.conf?' + FVG (strong zone)':''} · ${S.tf}</span> ${gt}</p><table>`+
    row('Entry',T.entry,'#f0b429',T.inside?'price in zone':pp(T.last,T.entry)+' away')+row('SL',T.sl,'#ff5d6c',pp(T.sl,T.entry))+
    T.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+'</table>'+
-   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(T.sweep,'Liquidity sweep before entry'+(T.sweep?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50%)':'Premium zone (above 50%)')}</p><button id="saveBtn" class="moreBtn">Save setup</button>`}
+   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(T.sweep,'Liquidity sweep before entry'+(T.sweep?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50%)':'Premium zone (above 50%)')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('smcSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),t:Math.floor(Date.now()/1000)});ls.set('smcSaved',l.slice(0,20));renderSV()}}
 function renderD(){const A=S.A,T=S.T,e=A.ev[A.ev.length-1],n=k=>A.ev.filter(x=>x.k===k).length;let h='<h3>විස්තරය</h3>';
@@ -148,3 +148,9 @@ let t;$('q').oninput=()=>{clearTimeout(t);const v=$('q').value.trim();if(v.lengt
   document.querySelectorAll('#sug li').forEach(l=>l.onmousedown=l.ontouchstart=e=>{e.preventDefault();$('q').value=l.dataset.s;$('sug').innerHTML='';S.img=l.dataset.i;load(l.dataset.s,1)})}catch(e){}},350)};
 $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
 renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
+
+window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),src:'SMC '+T.src,price:S.c[S.c.length-1].close}:null};
+
+Alerts.mount($('ALP'),$('alBtn'));
+Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);if(!T||T.none||!T.inside)return[];
+ return[{key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${T.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});

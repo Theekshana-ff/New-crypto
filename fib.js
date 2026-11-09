@@ -72,7 +72,7 @@ function renderB(){const F=S.F;let h='<h3>Fibonacci setup (auto)</h3>';
   h+=`<p><span class="tag ${F.d>0?'up':'down'}">${F.d>0?'LONG':'SHORT'}</span> <span class="msg">zone ${F.zr[0]}–${F.zr[1]} · ${S.tf}${S.man?' · manual leg':''}</span> ${gt}</p><table>`+
    row('Entry',F.entry,'#f0b429',F.state==='inside'?'price in zone':pp(F.last,F.entry)+' away')+row('SL',F.sl,'#ff5d6c',pp(F.sl,F.entry))+
    F.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+'</table>'+
-   `<p class="chk">${ck(F.state==='inside',`Price inside ${F.zr[0]}–${F.zr[1]} zone`)}<br>${ck(F.conf.length>0,'SMC confluence in zone'+(F.conf.length?' ('+F.conf.join(' + ')+')':''))}<br>${ck(F.aligned,'Leg follows market structure')}<br>${ck(F.clusterInZone,'Fib cluster in zone'+(F.clusters.length?' ('+F.clusters.map(x=>x.with).join(', ')+')':''))}<br>${ck(!F.broken,'Leg still valid (origin not broken)')}<br>${ck(!F.small,'Leg size is meaningful')}</p><button id="saveBtn" class="moreBtn">Save setup</button>`}
+   `<p class="chk">${ck(F.state==='inside',`Price inside ${F.zr[0]}–${F.zr[1]} zone`)}<br>${ck(F.conf.length>0,'SMC confluence in zone'+(F.conf.length?' ('+F.conf.join(' + ')+')':''))}<br>${ck(F.aligned,'Leg follows market structure')}<br>${ck(F.clusterInZone,'Fib cluster in zone'+(F.clusters.length?' ('+F.clusters.map(x=>x.with).join(', ')+')':''))}<br>${ck(!F.broken,'Leg still valid (origin not broken)')}<br>${ck(!F.small,'Leg size is meaningful')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('fibSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p),t:Math.floor(Date.now()/1000)});ls.set('fibSaved',l.slice(0,20));renderSV()}}
 function renderD(){const F=S.F;let h='<h3>විස්තරය</h3>';if(!F){$('D').innerHTML=h+'<p class="msg">Swing leg එකක් හඳුනාගත්තේ නෑ.</p>';return}
@@ -148,3 +148,9 @@ let t;$('q').oninput=()=>{clearTimeout(t);const v=$('q').value.trim();if(v.lengt
   document.querySelectorAll('#sug li').forEach(l=>l.onmousedown=l.ontouchstart=e=>{e.preventDefault();$('q').value=l.dataset.s;$('sug').innerHTML='';S.img=l.dataset.i;load(l.dataset.s,1)})}catch(e){}},350)};
 $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
 renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
+
+window.getSetup=()=>{const F=S.F;return F?{sym:S.sym,tf:S.tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p),src:'Fibonacci',price:S.c[S.c.length-1].close}:null};
+
+Alerts.mount($('ALP'),$('alBtn'));
+Alerts.init('Fibonacci',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,+$('sw').value),F=FIB.fib(c,A,CFG);if(!F||F.broken||F.state!=='inside')return[];const G=FIB.grade(F,null);
+ return[{key:`FIB|${sym}|${tf}|${F.d}|${pf(F.entry)}`,title:`Fibonacci · ${sym} ${tf}`,text:`${F.d>0?'LONG':'SHORT'}: price is inside the ${F.zr[0]}–${F.zr[1]} zone${G?' (grade '+G.g+')':''}\nEntry ${pf(F.entry)} | SL ${pf(F.sl)}\n${F.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});

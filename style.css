@@ -96,3 +96,11 @@ main .tfbar{background:none;border:0;padding:0 0 8px}
 .frow input[type=checkbox]{width:18px;height:18px;accent-color:var(--gold)}
 .cov{display:flex;flex-wrap:wrap;gap:6px}.cv{font-size:12px;padding:5px 9px;border:1px solid var(--line);border-radius:8px;color:var(--mute)}
 .cv.on{color:#000;background:var(--gold);border-color:var(--gold);font-weight:700;cursor:pointer}
+#abtn{position:fixed;right:14px;bottom:14px;z-index:60;min-width:48px;height:48px;border-radius:24px;background:var(--gold);color:#000;font-size:18px;border:0;padding:0 12px;font-weight:700;box-shadow:0 2px 10px #0008}
+#apanel{position:fixed;left:0;right:0;bottom:0;max-height:80vh;overflow:auto;z-index:70;background:var(--panel);border-top:1px solid var(--line);padding:14px;display:none}#apanel.open{display:block}
+#abanner{position:fixed;top:0;left:0;right:0;z-index:80;background:var(--gold);color:#000;padding:12px;font-weight:700;white-space:pre-line;display:none}
+.arow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line)}
+[hidden]{display:none!important}
+.toast{position:fixed;top:10px;left:10px;right:10px;z-index:100;background:var(--gold);color:#000;padding:12px 14px;border-radius:10px;font-weight:600;white-space:pre-line;box-shadow:0 4px 16px #0008}
+.alr{display:flex;align-items:center;gap:8px;margin:6px 0;font-size:14px}.alr input[type=checkbox]{width:18px;height:18px;accent-color:var(--gold)}
+.alr input:not([type=checkbox]){flex:1;background:var(--bg);border:1px solid var(--line);color:var(--text);padding:8px;border-radius:8px}
