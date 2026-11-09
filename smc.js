@@ -55,7 +55,7 @@ async function load(sym,first){
  try{const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);if(!r.ok)throw 0;
   const k=await r.json();if(!k.length)throw 0;
   S.sym=sym;
-  S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}));
+  S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
   const lp=S.c[S.c.length-1].close,pr=lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,n=S.c.length;
   S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);S.T=SMC.setup(S.c,S.A);
   for(const v of V){const r=v.chart.timeScale().getVisibleLogicalRange();
@@ -76,7 +76,7 @@ function renderB(){const T=S.T;let h='<h3>Trade setup (auto)</h3>';
   h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'LONG':'SHORT'}</span> <span class="msg">from ${T.d>0?'Bullish':'Bearish'} ${T.src}${T.conf?' + FVG (strong zone)':''} · ${S.tf}</span> ${gt}</p><table>`+
    row('Entry',T.entry,'#f0b429',T.inside?'price in zone':pp(T.last,T.entry)+' away')+row('SL',T.sl,'#ff5d6c',pp(T.sl,T.entry))+
    T.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+'</table>'+
-   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(T.sweep,'Liquidity sweep before entry'+(T.sweep?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50%)':'Premium zone (above 50%)')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
+   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(T.sweep,'Liquidity sweep before entry'+(T.sweep?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50%)':'Premium zone (above 50%)')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('smcSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),t:Math.floor(Date.now()/1000)});ls.set('smcSaved',l.slice(0,20));renderSV()}}
 function renderD(){const A=S.A,T=S.T,e=A.ev[A.ev.length-1],n=k=>A.ev.filter(x=>x.k===k).length;let h='<h3>විස්තරය</h3>';
@@ -90,7 +90,7 @@ function renderD(){const A=S.A,T=S.T,e=A.ev[A.ev.length-1],n=k=>A.ev.filter(x=>x
 // top-down checklist, risk calculator, saved setups, backtest
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
- return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}))}
+ return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}
 async function loadTD(f){if(!f&&Date.now()-S.tdT<60000&&S.tdSym===S.sym)return;S.tdT=Date.now();S.tdSym=S.sym;
  try{const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m})}catch(e){S.td=null}renderTD();renderB()}
 function renderTD(){const t=S.td;let h='<h3>Top-down checklist</h3>';
@@ -110,11 +110,7 @@ async function renderSV(){const list=ls.get('smcSaved',[]);
  const rows=await Promise.all(list.map(async s=>{let e={st:'pending',hit:0};try{e=SMC.evalSaved(s,await kl(s.sym,'5m',1000,s.t*1000))}catch(x){}return{s,e}}));
  $('SV').innerHTML='<h3>Saved setups</h3>'+(rows.length?'<table>'+rows.map(({s,e},i)=>`<tr><td>${logo(s.sym)} <b>${s.sym}</b> ${s.tf} <span class="${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span><br><small class="msg">Entry ${pf(s.entry)} · SL ${pf(s.sl)}</small></td><td>${lbl(e)}</td><td><button class="x" data-i="${i}">✕</button></td></tr>`).join('')+'</table>':'<p class="msg">Nothing saved yet. Use "Save setup" on a trade setup.</p>');
  document.querySelectorAll('#SV .x').forEach(b=>b.onclick=()=>{const l=ls.get('smcSaved',[]);l.splice(+b.dataset.i,1);ls.set('smcSaved',l);renderSV()})}
-$('BT').innerHTML='<h3>Backtest</h3><p class="msg">Runs this method on the selected coin and time frame (last 1000 candles).</p><button id="btRun" class="moreBtn">Run backtest</button><div id="btout"></div>';
-$('btRun').onclick=async()=>{$('btout').textContent='Running...';
- try{const c=await kl(S.sym,S.tf,1000);await new Promise(r=>setTimeout(r,30));const r=SMC.backtest(c),pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-';
-  $('btout').innerHTML=r.resolved?`<p>${S.sym} · ${S.tf}: setups <b>${r.setups}</b>, entered <b>${r.filled}</b>, finished <b>${r.resolved}</b></p><p class="up">TP1 hit: <b>${pc(r.wins,r.resolved)}</b> · TP2: ${pc(r.tp2,r.resolved)} · TP3: ${pc(r.tp3,r.resolved)}</p><p class="down">SL first: <b>${pc(r.losses,r.resolved)}</b></p><p>Expectancy (exit at TP1): <b>${r.exp>=0?'+':''}${r.exp.toFixed(2)}R</b> per trade</p><p>Strong zones (OB+FVG): ${r.strongN?pc(r.strongWin,r.strongN)+' win ('+r.strongN+' trades)':'none'}</p><p class="msg">Past results do not guarantee future results.</p>`:'<p class="msg">Not enough finished setups on this data. Try another time frame.</p>'}
- catch(e){$('btout').textContent='Could not run the backtest for this coin.'}};
+Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null});
 // higher-time-frame zones on the current chart
 const TFS=['1m','5m','15m','1h','4h','1d','1w'];
 async function loadHTF(){const h=$('htf').value;S.htf=[];
@@ -153,4 +149,8 @@ window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entr
 
 Alerts.mount($('ALP'),$('alBtn'));
 Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);if(!T||T.none||!T.inside)return[];
- return[{key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${T.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
+ return[{dir:T.d,key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${T.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
+
+function ctxCard(){const T=S.T,ok=T&&!T.none;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}
+{const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
+document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none)return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p)})});

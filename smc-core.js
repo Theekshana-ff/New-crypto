@@ -93,23 +93,31 @@ function evalSaved(s,c){
  if(hit&&st==='entered')st='tp';
  return{st,hit};
 }
-// Walk-forward backtest of the same setup logic (no look-ahead)
+// Walk-forward backtest (no look-ahead). Modes: 0 = exit all at TP1, 1 = managed (50% at TP1, stop to breakeven, runner to TP2), 2 = stats (TP reach before original SL)
+function sim(S,c,t,mg){
+ const long=S.d===1,rr=S.tps.map(x=>x.rr);let fill=-1,hit=0,stop=S.sl;const out=(h,R,sl)=>({hit:h,R,sl,strong:!!S.conf});
+ for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high;
+  if(fill<0){if(j>t+60)return null;
+   if(long?lo<=S.entry:hi>=S.entry){fill=j;if(long?lo<=S.sl:hi>=S.sl)return out(0,-1,1)}
+   else if(long?hi>=S.tps[0].p:lo<=S.tps[0].p)return null;
+   continue}
+  if(long?lo<=stop:hi>=stop)return hit?out(hit,mg===1?0.5*rr[0]:rr[0],0):out(0,-1,1);
+  S.tps.forEach((q,i)=>{if(long?hi>=q.p:lo<=q.p)hit=Math.max(hit,i+1)});
+  if(mg===1&&hit>=1)stop=S.entry;
+  if(mg===1?hit>=2:mg===0?hit>=1:hit>=3)return out(hit,mg===1?0.5*rr[0]+0.5*rr[1]:rr[0],0)}
+ return mg===2&&hit?out(hit,rr[0],0):null;
+}
 function backtest(c,step=4,gen){
- const seen=new Set(),res=[];
+ const seen=new Set(),rows=[];
  for(let t=150;t<c.length-5;t+=step){
   const sl=c.slice(0,t+1),A=analyze(sl),S=gen?gen(sl,A):setup(sl,A);
   if(!S||S.none)continue;const key=S.key||(S.d+'_'+S.z.i);if(seen.has(key))continue;seen.add(key);
-  const long=S.d===1;let fill=-1,out=null,hit=0;
-  for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high,slh=long?lo<=S.sl:hi>=S.sl;
-   if(fill<0){if(j>t+60)break;
-    if(long?lo<=S.entry:hi>=S.entry){fill=j;if(slh){out='sl';break}}
-    else if(long?hi>=S.tps[0].p:lo<=S.tps[0].p)break}
-   else{if(slh){out='sl';break}S.tps.forEach((q,i)=>{if(long?hi>=q.p:lo<=q.p)hit=Math.max(hit,i+1)});if(hit===3)break}}
-  if(fill>=0)res.push({hit,sl:out==='sl'?1:0,rr:S.tps[0].rr,strong:S.conf});
- }
- const rs=res.filter(r=>r.hit>=1||r.sl),w=rs.filter(r=>r.hit>=1),st=rs.filter(r=>r.strong),sw=st.filter(r=>r.hit>=1);
- return{setups:seen.size,filled:res.length,resolved:rs.length,wins:w.length,tp2:rs.filter(r=>r.hit>=2).length,tp3:rs.filter(r=>r.hit>=3).length,
-  losses:rs.length-w.length,exp:rs.length?(w.reduce((a,r)=>a+r.rr,0)-(rs.length-w.length))/rs.length:0,strongN:st.length,strongWin:sw.length};
+  const a=sim(S,c,t,2);if(a)rows.push({a,u:sim(S,c,t,0),m:sim(S,c,t,1)})}
+ const A=rows.map(r=>r.a),U=rows.map(r=>r.u).filter(Boolean),M=rows.map(r=>r.m).filter(Boolean),sm=l=>l.reduce((x,r)=>x+r.R,0),st=A.filter(r=>r.strong);
+ return{setups:seen.size,filled:A.length,resolved:A.length,wins:A.filter(r=>r.hit>=1).length,tp2:A.filter(r=>r.hit>=2).length,tp3:A.filter(r=>r.hit>=3).length,losses:A.filter(r=>!r.hit).length,
+  sU:sm(U),nU:U.length,sM:sm(M),nM:M.length,exp:U.length?sm(U)/U.length:0,expM:M.length?sm(M)/M.length:0,strongN:st.length,strongWin:st.filter(r=>r.hit>=1).length};
 }
-root.SMC={analyze,setup,topDown,grade,evalSaved,backtest};if(typeof module!=='undefined')module.exports=root.SMC;
+function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
+ s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
+root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);

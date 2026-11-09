@@ -7,7 +7,7 @@ const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
 const pp=(p,r)=>((p-r)/r*100).toFixed(2)+'%';
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
- return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}))}
+ return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}
 let S={sym:'BTC',tf:'1h',img:'',c:[],A:null,P:[],sel:null,all:false,lines:[],F:{dbl:1,hs:1,tri:1,wdg:1,chn:1,flg:1,adv:1}};
 setInterval(function t(){const d=new Date();$('time').textContent=d.toLocaleTimeString();$('date').textContent=d.toLocaleDateString('en',{weekday:'short',year:'numeric',month:'short',day:'numeric'});return t}(),1000);
 const tg=o=>{$('drawer').classList.toggle('open',o);$('scrim').classList.toggle('show',o)};
@@ -82,7 +82,7 @@ function renderB(){const L=list();let h='<h3>Detected patterns</h3>';
 function renderD(){const p=cur();let h='<h3>විස්තරය</h3>';if(!p){$('D').innerHTML=h+'<p class="msg">Pattern එකක් තෝරන්න.</p>';return}
  h+=`<p><b>${p.names.join(' / ')}</b> · <span class="${p.bias==='bull'?'up':p.bias==='bear'?'down':''}">${p.status}</span></p><p>${descOf(p)}</p>`;
  if(p.dir){const last=S.c[S.c.length-1].close,row=(n,v,col,x)=>`<tr><td style="color:${col}">${n}</td><td>${pf(v)}</td><td>${x}</td></tr>`;
-  h+=`<p><span class="tag ${p.dir>0?'up':'down'}">${p.dir>0?'LONG':'SHORT'}</span> <span class="msg">breakout entry</span></p><table>`+row('Entry',p.entry,'#f0b429',pp(last,p.entry)+' away')+row('SL',p.sl,'#ff5d6c',pp(p.sl,p.entry))+p.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+`</table><p class="msg">TP = pattern උසේ 0.5 / 1.0 / 1.618 ගුණය. ${/breakout|breakdown/.test(p.status)?'Breakout එක දැනටමත් වෙලා, retest එකක් එනකම් බලන්න.':'Breakout එක තහවුරු වෙනකම් (candle close) ඉන්න.'}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
+  h+=`<p><span class="tag ${p.dir>0?'up':'down'}">${p.dir>0?'LONG':'SHORT'}</span> <span class="msg">breakout entry</span></p><table>`+row('Entry',p.entry,'#f0b429',pp(last,p.entry)+' away')+row('SL',p.sl,'#ff5d6c',pp(p.sl,p.entry))+p.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+`</table><p class="msg">TP = pattern උසේ 0.5 / 1.0 / 1.618 ගුණය. ${/breakout|breakdown/.test(p.status)?'Breakout එක දැනටමත් වෙලා, retest එකක් එනකම් බලන්න.':'Breakout එක තහවුරු වෙනකම් (candle close) ඉන්න.'}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  else h+='<p class="msg">මේ pattern එකට breakout setup එකක් නෑ. කැඩෙන පැත්ත බලලා ඊට පස්සේ trade කරන්න.</p>';
  h+='<p class="msg">Auto analysis එකක් විතරයි, financial advice නෙවෙයි. Pattern හඳුනාගැනීම සමහර වෙලාවට වැරදෙන්න පුළුවන්.</p>';
  $('D').innerHTML=h;
@@ -120,5 +120,10 @@ window.getSetup=()=>{const p=cur();return p&&p.dir?{sym:S.sym,tf:S.tf,d:p.dir,en
 
 Alerts.mount($('ALP'),$('alBtn'));
 Alerts.init('Patterns',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,+$('sw').value),last=c[c.length-1].close;
- return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
+ return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({dir:p.dir,key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
   text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${p.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}))});
+
+Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false}:null}});
+function ctxCard(){const p=cur();Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:p?p.dir:0,G:null})}
+{const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
+document.addEventListener('click',e=>{if(e.target.id!=='jBtn')return;const p=cur();if(!p||!p.dir)return;Ctx.addTrade({method:'Patterns',sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p)})});

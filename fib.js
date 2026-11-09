@@ -14,7 +14,7 @@ const tg=o=>{$('drawer').classList.toggle('open',o);$('scrim').classList.toggle(
 $('menuBtn').onclick=()=>tg(1);$('scrim').onclick=()=>tg(0);
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
- return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4]}))}
+ return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}
 const chart=LightweightCharts.createChart($('cht'),{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
 const series=chart.addCandlestickSeries({upColor:'#2ecc9a',downColor:'#ff5d6c',wickUpColor:'#2ecc9a',wickDownColor:'#ff5d6c',borderVisible:false});
 const made=[],none={autoscaleInfoProvider:()=>null,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false};
@@ -72,7 +72,7 @@ function renderB(){const F=S.F;let h='<h3>Fibonacci setup (auto)</h3>';
   h+=`<p><span class="tag ${F.d>0?'up':'down'}">${F.d>0?'LONG':'SHORT'}</span> <span class="msg">zone ${F.zr[0]}–${F.zr[1]} · ${S.tf}${S.man?' · manual leg':''}</span> ${gt}</p><table>`+
    row('Entry',F.entry,'#f0b429',F.state==='inside'?'price in zone':pp(F.last,F.entry)+' away')+row('SL',F.sl,'#ff5d6c',pp(F.sl,F.entry))+
    F.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1))).join('')+'</table>'+
-   `<p class="chk">${ck(F.state==='inside',`Price inside ${F.zr[0]}–${F.zr[1]} zone`)}<br>${ck(F.conf.length>0,'SMC confluence in zone'+(F.conf.length?' ('+F.conf.join(' + ')+')':''))}<br>${ck(F.aligned,'Leg follows market structure')}<br>${ck(F.clusterInZone,'Fib cluster in zone'+(F.clusters.length?' ('+F.clusters.map(x=>x.with).join(', ')+')':''))}<br>${ck(!F.broken,'Leg still valid (origin not broken)')}<br>${ck(!F.small,'Leg size is meaningful')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
+   `<p class="chk">${ck(F.state==='inside',`Price inside ${F.zr[0]}–${F.zr[1]} zone`)}<br>${ck(F.conf.length>0,'SMC confluence in zone'+(F.conf.length?' ('+F.conf.join(' + ')+')':''))}<br>${ck(F.aligned,'Leg follows market structure')}<br>${ck(F.clusterInZone,'Fib cluster in zone'+(F.clusters.length?' ('+F.clusters.map(x=>x.with).join(', ')+')':''))}<br>${ck(!F.broken,'Leg still valid (origin not broken)')}<br>${ck(!F.small,'Leg size is meaningful')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`}
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('fibSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p),t:Math.floor(Date.now()/1000)});ls.set('fibSaved',l.slice(0,20));renderSV()}}
 function renderD(){const F=S.F;let h='<h3>විස්තරය</h3>';if(!F){$('D').innerHTML=h+'<p class="msg">Swing leg එකක් හඳුනාගත්තේ නෑ.</p>';return}
@@ -99,14 +99,7 @@ async function renderSV(){const list=ls.get('fibSaved',[]);
  const rows=await Promise.all(list.map(async s=>{let e={st:'pending',hit:0};try{e=SMC.evalSaved(s,await kl(s.sym,'5m',1000,s.t*1000))}catch(x){}return{s,e}}));
  $('SV').innerHTML='<h3>Saved setups</h3>'+(rows.length?'<table>'+rows.map(({s,e},i)=>`<tr><td>${logo(s.sym)} <b>${s.sym}</b> ${s.tf} <span class="${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span><br><small class="msg">Entry ${pf(s.entry)} · SL ${pf(s.sl)}</small></td><td>${lbl(e)}</td><td><button class="x" data-i="${i}">✕</button></td></tr>`).join('')+'</table>':'<p class="msg">Nothing saved yet. Use "Save setup" on a trade setup.</p>');
  document.querySelectorAll('#SV .x').forEach(b=>b.onclick=()=>{const l=ls.get('fibSaved',[]);l.splice(+b.dataset.i,1);ls.set('fibSaved',l);renderSV()})}
-// 7) backtest
-$('BT').innerHTML='<h3>Backtest</h3><p class="msg">Runs this Fibonacci method (current settings) on the selected coin and time frame, last 1000 candles.</p><button id="btRun" class="moreBtn">Run backtest</button><div id="btout"></div>';
-$('btRun').onclick=async()=>{$('btout').textContent='Running...';
- try{const c=await kl(S.sym,S.tf,1000);await new Promise(r=>setTimeout(r,30));
-  const gen=(sl,A)=>{const q=FIB.fib(sl,A,CFG);if(!q||q.broken)return null;return{...q,key:q.d+'_'+q.leg.a.i,conf:q.conf.length>0}};
-  const r=SMC.backtest(c,4,gen),pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-';
-  $('btout').innerHTML=r.resolved?`<p>${S.sym} · ${S.tf}: setups <b>${r.setups}</b>, entered <b>${r.filled}</b>, finished <b>${r.resolved}</b></p><p class="up">TP1 hit: <b>${pc(r.wins,r.resolved)}</b> · TP2: ${pc(r.tp2,r.resolved)} · TP3: ${pc(r.tp3,r.resolved)}</p><p class="down">SL first: <b>${pc(r.losses,r.resolved)}</b></p><p>Expectancy (exit at TP1): <b>${r.exp>=0?'+':''}${r.exp.toFixed(2)}R</b> per trade</p><p>With SMC confluence: ${r.strongN?pc(r.strongWin,r.strongN)+' win ('+r.strongN+' trades)':'none'}</p><p class="msg">Past results do not guarantee future results.</p>`:'<p class="msg">Not enough finished setups on this data. Try another time frame.</p>'}
- catch(e){$('btout').textContent='Could not run the backtest for this coin.'}};
+Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const q=FIB.fib(sl,A,CFG);if(!q||q.broken)return null;return{...q,key:q.d+'_'+q.leg.a.i,conf:q.conf.length>0}}});
 // 6) scanner
 $('SC').innerHTML='<h3>Coin scanner</h3><p class="msg">Scans the 30 most traded coins on the selected time frame and lists those in or near their Buy/Sell zone.</p><button id="scRun" class="moreBtn">Scan top 30</button><div id="scOut"></div>';
 $('scRun').onclick=async()=>{const out=$('scOut');out.textContent='Loading coins...';
@@ -153,4 +146,8 @@ window.getSetup=()=>{const F=S.F;return F?{sym:S.sym,tf:S.tf,d:F.d,entry:F.entry
 
 Alerts.mount($('ALP'),$('alBtn'));
 Alerts.init('Fibonacci',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,+$('sw').value),F=FIB.fib(c,A,CFG);if(!F||F.broken||F.state!=='inside')return[];const G=FIB.grade(F,null);
- return[{key:`FIB|${sym}|${tf}|${F.d}|${pf(F.entry)}`,title:`Fibonacci · ${sym} ${tf}`,text:`${F.d>0?'LONG':'SHORT'}: price is inside the ${F.zr[0]}–${F.zr[1]} zone${G?' (grade '+G.g+')':''}\nEntry ${pf(F.entry)} | SL ${pf(F.sl)}\n${F.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
+ return[{dir:F.d,key:`FIB|${sym}|${tf}|${F.d}|${pf(F.entry)}`,title:`Fibonacci · ${sym} ${tf}`,text:`${F.d>0?'LONG':'SHORT'}: price is inside the ${F.zr[0]}–${F.zr[1]} zone${G?' (grade '+G.g+')':''}\nEntry ${pf(F.entry)} | SL ${pf(F.sl)}\n${F.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
+
+function ctxCard(){const F=S.F;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:F?F.d:0,G:F?FIB.grade(F,S.rx):null})}
+{const _rf=refit;refit=function(){_rf.apply(this,arguments);ctxCard()}}
+document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.F)return;const F=S.F;Ctx.addTrade({method:'Fibonacci',sym:S.sym,tf:S.tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p)})});
