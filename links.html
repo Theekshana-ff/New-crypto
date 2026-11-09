@@ -1,4 +1,16 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Other websites</title><link rel="stylesheet" href="style.css"></head>
-<body><div class="page"><a href="index.html" class="up">&larr; Home</a><h1>Other websites</h1><p class="msg">This page is ready for your Other websites content.</p></div></body></html>
+<title>Market trends</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="top"><div class="row"><button id="menuBtn" aria-label="Menu">&#9776;</button>
+ <form class="search" id="sf"><input id="q" placeholder="Open a coin (BTC, LINK...)" autocomplete="off"><button>Go</button></form>
+ <div class="clock"><div id="time"></div><div id="date"></div></div></div></header>
+<div id="scrim"></div>
+<nav id="drawer"><h3>Menu</h3><a href="index.html">Home</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a><a href="patterns.html">Chart patterns</a><a href="journal.html">Trade journal</a><a href="links.html">Other websites</a></nav>
+<main>
+ <section class="card" id="FG" hidden></section>
+ <div class="two"><section class="card" id="GA"></section><section class="card" id="OB"></section></div>
+ <section class="card" id="SC" style="margin-top:12px"></section>
+</main>
+<script src="smc-core.js"></script><script src="fib-core.js"></script><script src="pat-core.js"></script><script src="ta-core.js"></script><script src="links.js"></script>
+</body></html>
