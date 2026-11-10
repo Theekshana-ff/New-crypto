@@ -1,6 +1,8 @@
 // 24/7 alerts for GitHub Actions: checks the coins in watch.json with the same SMC / Fibonacci / Chart-pattern logic as the site and sends Telegram messages.
 const fs=require('fs'),path=require('path'),root=path.join(__dirname,'..');
-const SMC=require(path.join(root,'smc-core.js')),FIB=require(path.join(root,'fib-core.js')),PAT=require(path.join(root,'pat-core.js'));
+const SMC=require(path.join(root,'smc-core.js')),FIB=require(path.join(root,'fib-core.js')),PAT=require(path.join(root,'pat-core.js')),STRAT=require(path.join(root,'strat-core.js'));
+let ST={enabled:[]};try{ST=JSON.parse(fs.readFileSync(path.join(root,'strategy.json'),'utf8'))}catch(e){}
+const LOOK=+process.env.LOOKBACK_MIN||45;
 const cfg=Object.assign({coins:['BTC','ETH','SOL'],timeframes:['15m','1h'],methods:['smc','fib','patterns'],filters:{news:true,btc:false,range:false,funding:false},cooldownHours:6},JSON.parse(fs.readFileSync(path.join(root,'watch.json'),'utf8')));
 const TOKEN=process.env.TELEGRAM_BOT_TOKEN,CHAT=process.env.TELEGRAM_CHAT_ID,TEST=process.env.TEST==='1',DRY=process.env.DRY_RUN==='1';
 const HOSTS=['https://data-api.binance.vision','https://api.binance.us','https://api.binance.com'];
@@ -37,6 +39,10 @@ function evalCtx(cx,fund,rv,dir,sym){const notes=[],block={},b=cx.btc;if(!b)note
   if(cfg.methods.includes('smc')){const T=SMC.setup(c,A4);const gS=T&&!T.none?SMC.grade(T,null):null;if(T&&!T.none&&T.inside&&gS&&gS.pts>=4)found.push({m:'SMC',sig:'SMC '+T.src,key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,dir:T.d,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${tpl(T.tps.map(t=>t.p))}`})}
   if(cfg.methods.includes('fib')){const f=FIB.fib(c,A6,FIB.DEF);if(f&&!f.broken&&f.state==='inside'){const g=FIB.grade(f,null);if(g&&g.g!=='C')found.push({m:'FIB',sig:'Fibonacci',key:`FIB|${sym}|${tf}|${f.d}|${pf(f.entry)}`,dir:f.d,title:`Fibonacci · ${sym} ${tf}`,text:`${f.d>0?'LONG':'SHORT'}: price is inside the ${f.zr[0]}–${f.zr[1]} zone${g?' (grade '+g.g+')':''}\nEntry ${pf(f.entry)} | SL ${pf(f.sl)}\n${tpl(f.tps.map(t=>t.p))}`})}}
   if(cfg.methods.includes('patterns'))PAT.detect(c,A6).filter(p=>p.dir&&p.tps&&!(cfg.skipPatterns||[]).includes(p.names[0])&&Math.abs(last-p.entry)<=A6.atr*0.8).slice(0,3).forEach(p=>found.push({m:'PAT',sig:p.names[0],key:`PAT|${sym}|${tf}|${p.id}`,dir:p.dir,title:`Pattern · ${sym} ${tf}`,text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${tpl(p.tps.map(t=>t.p))}`}));
+  if(cfg.methods.includes('strategy')){const tfms=({'15m':9e5,'1h':36e5,'4h':144e5})[tf]||36e5,rules=(ST.enabled||[]).filter(e=>e.tf===tf);
+   if(rules.length&&c.length>=250){const P=STRAT.prep(c);for(let i=n;i>=Math.max(210,n-3);i--){if(now-(c[i].time*1000+tfms)>LOOK*60000)break;
+    for(const e of rules){const d=STRAT.signal(P,i,e.cfg);if(!d)continue;const pl=STRAT.plan(P,i,e.cfg,d,c[i].close),q=e.stats||{};
+     found.push({m:'STRAT',sig:'Strategy '+e.name,key:`STRAT|${sym}|${tf}|${e.id||e.name}|${c[i].time}`,dir:d,title:`Strategy · ${sym} ${tf}`,text:`${d>0?'LONG':'SHORT'} — ${e.name}\nSignal on a CLOSED candle. Enter at the next candle open (about ${pf(pl.entry)})\nSL ${pf(pl.sl)} (${e.cfg.k}×ATR) | TP ${pf(pl.tp)} (${e.cfg.m}R)\nReal-data test (fees included): ${q.trades||'?'} trades, expectancy train ${q.expTrain}R / val ${q.expValidation}R / test ${q.expTest}R`})}}}}
   for(const a of found){if(state[a.key]&&now-state[a.key]<cd)continue;
    if(V.disabled.includes('Method: '+a.m)||V.disabled.includes('Signal: '+a.sig)||V.disabled.includes('Time frame: '+tf)){console.log('skipped (failed real-data validation):',a.key);continue}
    const e=evalCtx(cx,F.funding?await funding(sym):null,rv,a.dir,sym);
