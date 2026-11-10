@@ -146,7 +146,7 @@ window.getSetup=()=>{const F=S.F;return F?{sym:S.sym,tf:S.tf,d:F.d,entry:F.entry
 
 Alerts.mount($('ALP'),$('alBtn'));HTF.mount($('HB'),()=>S.sym,()=>S.F&&S.F.d);
 Alerts.init('Fibonacci',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym,tf,500)).slice(0,-1),A=SMC.analyze(c,+$('sw').value),F=FIB.fib(c,A,CFG);if(!F||F.broken||F.state!=='inside')return[];const G=FIB.grade(F,null);if(!G||G.g==='C')return[];
- return[{dir:F.d,trade:{method:'Fibonacci',sym,tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p)},key:`FIB|${sym}|${tf}|${F.d}|${pf(F.entry)}`,title:`Fibonacci · ${sym} ${tf}`,text:`${F.d>0?'LONG':'SHORT'}: price is inside the ${F.zr[0]}–${F.zr[1]} zone${G?' (grade '+G.g+')':''}\nEntry ${pf(F.entry)} | SL ${pf(F.sl)}\n${F.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
+ return[{m:'FIB',sig:'Fibonacci',dir:F.d,trade:{method:'Fibonacci',sym,tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p)},key:`FIB|${sym}|${tf}|${F.d}|${pf(F.entry)}`,title:`Fibonacci · ${sym} ${tf}`,text:`${F.d>0?'LONG':'SHORT'}: price is inside the ${F.zr[0]}–${F.zr[1]} zone${G?' (grade '+G.g+')':''}\nEntry ${pf(F.entry)} | SL ${pf(F.sl)}\n${F.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
 
 function ctxCard(){const F=S.F;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:F?F.d:0,G:F?FIB.grade(F,S.rx):null})}
 {const _rf=refit;refit=function(){_rf.apply(this,arguments);ctxCard()}}

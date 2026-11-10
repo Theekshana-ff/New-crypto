@@ -1,6 +1,7 @@
 // Shared alerts: in-page toast + sound/vibrate + browser notification + Telegram message
 const Alerts=(()=>{
  const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
+ let VAL=null;const loadV=async()=>{if(VAL)return VAL;try{const r=await fetch('/validated.json');VAL=r.ok?await r.json():{disabled:[]}}catch(e){VAL={disabled:[]}}VAL.disabled=VAL.disabled||[];return VAL};
  let cfg=Object.assign({on:false,notif:true,sound:true,token:'',chat:'',watch:'',fb:true,fr:true,fn:true,ff:true,fh:true,aj:true},ls.get('alCfg',{})),gs,gt,fn,busy=false,actx,panel;
  const save=()=>ls.set('alCfg',cfg),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  function beep(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=880;g.gain.value=0.15;o.start();setTimeout(()=>o.stop(),350)}catch(e){}}
@@ -16,6 +17,7 @@ const Alerts=(()=>{
   try{const coins=[...new Set([gs(),...cfg.watch.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean)])].slice(0,11),sent=ls.get('alSent',{}),now=Date.now();
    for(const sym of coins){let res=[];try{res=await fn(sym,gt())}catch(e){}
     for(const a of res){if(sent[a.key]&&now-sent[a.key]<6*3600e3)continue;
+     {const V=await loadV();if(a.m&&(V.disabled.includes('Method: '+a.m)||V.disabled.includes('Signal: '+a.sig)||V.disabled.includes('Time frame: '+gt())))continue}
      if(window.Ctx&&a.dir){try{const cx=await Ctx.get(sym,null,gt()),e=Ctx.eval(cx,a.dir,sym);
       if((cfg.fn&&e.block.news)||(cfg.fb&&e.block.btc)||(cfg.fr&&e.block.range)||(cfg.ff&&e.block.fund))continue;
       a.text+='\nContext: '+e.notes.map(n=>(n.ok===true?'✓ ':n.ok===false?'✗ ':'• ')+n.text).join('; ')}catch(x){}}
