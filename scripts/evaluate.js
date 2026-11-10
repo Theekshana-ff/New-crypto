@@ -15,7 +15,7 @@ const agg={};const add=(name,a,u,m)=>{const g=agg[name]=agg[name]||{n:0,w:0,tp2:
   for(let t=150;t<c.length-5;t+=STEP){const sl=c.slice(0,t+1),A4=SMC.analyze(sl,/m$/.test(tf)?5:4),A6=SMC.analyze(sl,6),cand=[];
    const T=SMC.setup(sl,A4);if(T&&!T.none){cand.push({name:'SMC: OB/FVG zone',S:T,key:'S'+T.d+'_'+T.z.i});if(T.conf)cand.push({name:'SMC: OB+FVG confluence',S:T,key:'C'+T.d+'_'+T.z.i})}
    const F=FIB.fib(sl,A6,FIB.DEF);if(F&&!F.broken)cand.push({name:'Fibonacci 0.5-0.62 zone',S:F,key:'F'+F.d+'_'+F.leg.a.i});
-   PAT.detect(sl,A6).filter(p=>p.dir&&p.tps).forEach(p=>cand.push({name:'Pattern: '+p.names[0],S:{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps},key:'P'+p.id}));
+   PAT.detect(sl,A6).filter(p=>p.dir&&p.tps).forEach(p=>cand.push({name:'Pattern: '+p.names[0],S:{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,brk:p.brk},key:'P'+p.id}));
    for(const x of cand){if(seen.has(x.key))continue;seen.add(x.key);const a=SMC.sim(x.S,c,t,2);if(!a)continue;add(x.name,a,SMC.sim(x.S,c,t,0),SMC.sim(x.S,c,t,1))}}}
  const pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-',sg=v=>(v>=0?'+':'')+v.toFixed(2),rows=Object.entries(agg).map(([k,g])=>({k,...g,eU:g.nU?g.sU/g.nU:0,eM:g.nM?g.sM/g.nM:0})).sort((a,b)=>b.n-a.n);
  const line=r=>`| ${r.k} | ${r.n} | ${pc(r.w,r.n)} | ${pc(r.tp2,r.n)} | ${pc(r.l,r.n)} | ${sg(r.eU)}R | ${sg(r.eM)}R | ${r.n<30?'few trades':r.eM>0.15?'✅ works':r.eM<0?'⚠ negative':'– weak'} |`;

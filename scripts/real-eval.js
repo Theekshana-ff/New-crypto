@@ -21,7 +21,7 @@ const HEAD='| | trades | TP1 | TP2 | SL first | exit all at TP1 | managed | with
   for(let t=150;t<c.length-5;t+=STEP){const sl=c.slice(0,t+1),A4=SMC.analyze(sl,L4),A6=SMC.analyze(sl,6),cand=[];
    const T=SMC.setup(sl,A4);if(T&&!T.none)cand.push(['smc',T.d+'_'+T.z.i,T,'SMC']);
    const F=FIB.fib(sl,A6,FIB.DEF);if(F&&!F.broken)cand.push(['fib',F.d+'_'+F.leg.a.i,{...F,conf:F.conf.length>0},'Fibonacci']);
-   PAT.detect(sl,A6).filter(p=>p.dir&&p.tps&&!/breakout|breakdown/.test(p.status)).forEach(p=>cand.push(['pat',p.id,{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,conf:false},p.names[0]]));
+   PAT.detect(sl,A6).filter(p=>p.dir&&p.tps&&!/breakout|breakdown/.test(p.status)).forEach(p=>cand.push(['pat',p.id,{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,conf:false,brk:p.brk},p.names[0]]));
    for(const[m,key,S,name]of cand){if(seen[m].has(key))continue;seen[m].add(key);const a=SMC.sim(S,c,t,2);if(!a)continue;const r={a,u:SMC.sim(S,c,t,0),m:SMC.sim(S,c,t,1)};
     rows[m].push(r);byTf[tf][m].push(r);if(m==='pat')(byName[name]=byName[name]||[]).push(r)}}}
  const L=[];L.push(`# Real-market analysis report`,`${new Date().toISOString().slice(0,16)} UTC · ${tick.length} coins (${tick.join(', ')}) · time frames ${TFS.join(', ')} · up to 1000 candles each · step ${STEP}`,'');

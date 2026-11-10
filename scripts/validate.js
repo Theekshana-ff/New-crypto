@@ -17,9 +17,9 @@ const B={};const add=(key,a,u,m)=>{const b=B[key]=B[key]||{n:0,h1:0,h2:0,h3:0,sl
   for(let t=WIN-1;t<c.length-60;t+=STEP){const w=c.slice(t-WIN+1,t+1),off=t-WIN+1,A4=SMC.analyze(w,/m$/.test(tf)?5:4),A6=SMC.analyze(w,6),sig=[];
    const T=SMC.setup(w,A4);if(T&&!T.none)sig.push({k:`SMC${T.d}_${off+T.z.i}`,m:'SMC',S:T,strong:!!T.conf,name:'SMC '+T.src});
    const F=FIB.fib(w,A6,FIB.DEF);if(F&&!F.broken)sig.push({k:`FIB${F.d}_${off+F.leg.a.i}`,m:'FIB',S:{d:F.d,entry:F.entry,sl:F.sl,tps:F.tps,conf:F.conf.length>0},strong:F.conf.length>0,name:'Fibonacci'});
-   for(const p of PAT.detect(w,A6))if(p.dir&&p.tps&&!/breakout|breakdown/.test(p.status))sig.push({k:`PAT_${p.names[0]}_${off+p.start}`,m:'PAT',S:{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,conf:false},name:p.names[0]});
+   for(const p of PAT.detect(w,A6))if(p.dir&&p.tps&&!/breakout|breakdown/.test(p.status))sig.push({k:`PAT_${p.names[0]}_${off+p.start}`,m:'PAT',S:{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,conf:false,brk:p.brk},name:p.names[0]});
    for(const s of sig){if(seen.has(s.k))continue;seen.add(s.k);
-    const S={d:s.S.d,entry:s.S.entry,sl:s.S.sl,tps:s.S.tps,conf:s.S.conf},a=SMC.sim(S,c,t,2);if(!a)continue;costR=FEE*S.entry/(Math.abs(S.entry-S.sl)||S.entry);const u=SMC.sim(S,c,t,0),m=SMC.sim(S,c,t,1);
+    const S={d:s.S.d,entry:s.S.entry,sl:s.S.sl,tps:s.S.tps,conf:s.S.conf,brk:s.S.brk},a=SMC.sim(S,c,t,2);if(!a)continue;costR=FEE*S.entry/(Math.abs(S.entry-S.sl)||S.entry);const u=SMC.sim(S,c,t,0),m=SMC.sim(S,c,t,1);
     add('ALL',a,u,m);add('Method: '+s.m,a,u,m);add('Signal: '+s.name,a,u,m);add('Time frame: '+tf,a,u,m);add('Direction: '+(S.d>0?'long':'short'),a,u,m);if(s.strong)add('With OB/FVG confluence ('+s.m+')',a,u,m)}}
   process.stdout.write(`${sym} ${tf} done\n`)}
  const pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-',sg=x=>(x>=0?'+':'')+x.toFixed(2),rows=Object.entries(B).filter(([k,b])=>k==='ALL'||b.n>=15).sort((x,y)=>(x[0]==='ALL'?-1:y[1].n-x[1].n));
