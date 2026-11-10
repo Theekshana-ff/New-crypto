@@ -19,6 +19,7 @@ async function context(){const o={};
  return o}
 const fcache={};async function funding(sym){if(sym in fcache)return fcache[sym];let v=null;try{const r=await fetch(`https://fapi.binance.com/fapi/v1/premiumIndex?symbol=${sym}USDT`);if(r.ok)v=+(await r.json()).lastFundingRate}catch(e){}return fcache[sym]=v}
 const T3=t=>t>0?'Bullish':t<0?'Bearish':'Neutral';
+const hc={};async function bias(sym){if(hc[sym])return hc[sym];let v={d1:0,h4:0};try{const[a,b]=await Promise.all([kl(sym,'1d',300),kl(sym,'4h',300)]);v={d1:SMC.analyze(a,6).trend,h4:SMC.analyze(b,6).trend}}catch(e){v=null}return hc[sym]=v}
 function evalCtx(cx,fund,rv,dir,sym){const notes=[],block={},b=cx.btc;
  if(b){notes.push(`BTC 4h ${T3(b.t4)} · 1d ${T3(b.t1)} · ${b.range?'ranging':'trending'}`);
   if(dir&&sym!=='BTC'){const al=(b.t4===dir)+(b.t1===dir),op=(b.t4===-dir)+(b.t1===-dir);if(al===2)notes.push('✓ follows BTC trend');else if(op>=1){block.btc=1;notes.push('✗ against BTC trend')}}if(b.range)block.range=1}
@@ -33,9 +34,10 @@ function evalCtx(cx,fund,rv,dir,sym){const notes=[],block={},b=cx.btc;
   const n=c.length-1,last=c[n].close,A4=SMC.analyze(c,/m$/.test(tf)?5:4),A6=SMC.analyze(c,6),found=[],avg=c.slice(n-20,n).reduce((s,x)=>s+x.vol,0)/20,rv=avg?c[n-1].vol/avg:null;
   if(cfg.methods.includes('smc')){const T=SMC.setup(c,A4);const gS=T&&!T.none?SMC.grade(T,null):null;if(T&&!T.none&&T.inside&&gS&&gS.pts>=4)found.push({key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,dir:T.d,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${tpl(T.tps.map(t=>t.p))}`})}
   if(cfg.methods.includes('fib')){const f=FIB.fib(c,A6,FIB.DEF);if(f&&!f.broken&&f.state==='inside'){const g=FIB.grade(f,null);if(g&&g.g!=='C')found.push({key:`FIB|${sym}|${tf}|${f.d}|${pf(f.entry)}`,dir:f.d,title:`Fibonacci · ${sym} ${tf}`,text:`${f.d>0?'LONG':'SHORT'}: price is inside the ${f.zr[0]}–${f.zr[1]} zone${g?' (grade '+g.g+')':''}\nEntry ${pf(f.entry)} | SL ${pf(f.sl)}\n${tpl(f.tps.map(t=>t.p))}`})}}
-  if(cfg.methods.includes('patterns'))PAT.detect(c,A6).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A6.atr*0.8).slice(0,3).forEach(p=>found.push({key:`PAT|${sym}|${tf}|${p.id}`,dir:p.dir,title:`Pattern · ${sym} ${tf}`,text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${tpl(p.tps.map(t=>t.p))}`}));
+  if(cfg.methods.includes('patterns'))PAT.detect(c,A6).filter(p=>p.dir&&p.tps&&!(cfg.skipPatterns||[]).includes(p.names[0])&&Math.abs(last-p.entry)<=A6.atr*0.8).slice(0,3).forEach(p=>found.push({key:`PAT|${sym}|${tf}|${p.id}`,dir:p.dir,title:`Pattern · ${sym} ${tf}`,text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${tpl(p.tps.map(t=>t.p))}`}));
   for(const a of found){if(state[a.key]&&now-state[a.key]<cd)continue;
    const e=evalCtx(cx,F.funding?await funding(sym):null,rv,a.dir,sym);
+   if(F.htf!==false){const b=await bias(sym);if(b){if(a.dir&&(b.d1===-a.dir||(b.d1===0&&b.h4===-a.dir))){console.log('skipped by HTF bias:',a.key);continue}e.notes.push(`HTF 1D ${T3(b.d1)} · 4H ${T3(b.h4)}`)}}
    if((F.news&&e.block.news)||(F.btc&&e.block.btc)||(F.range&&e.block.range)||(F.funding&&e.block.fund)){console.log('skipped by filter:',a.key);continue}
    state[a.key]=now;sentN++;await send(`🔔 ${a.title}\n${a.text}\nContext: ${e.notes.join('; ')}\n\n(Auto analysis, not financial advice)`)}}
  for(const k in state)if(now-state[k]>864e5)delete state[k];writeState(state);

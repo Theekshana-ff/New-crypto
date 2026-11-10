@@ -24,7 +24,9 @@ const B={};const add=(key,a,u,m)=>{const b=B[key]=B[key]||{n:0,h1:0,h2:0,h3:0,sl
  const pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-',sg=x=>(x>=0?'+':'')+x.toFixed(2),rows=Object.entries(B).filter(([k,b])=>k==='ALL'||b.n>=15).sort((x,y)=>(x[0]==='ALL'?-1:y[1].n-x[1].n));
  let md=`## Real-market validation\n${series} series (${list.length} coins x ${TFS.join('/')}), ${TOTAL} candles each, signals from past data only, fees and slippage not included.\n\n| Group | Trades | TP1 hit | TP2 | SL first | Exp. (all at TP1) | Exp. (managed) |\n|---|---|---|---|---|---|---|\n`;
  md+=rows.map(([k,b])=>`| ${k} | ${b.n} | ${pc(b.h1,b.n)} | ${pc(b.h2,b.n)} | ${pc(b.sl,b.n)} | ${sg(b.sU/b.n)}R | ${sg(b.sM/b.n)}R |`).join('\n');
- md+='\n\nRead it like this: expectancy above 0R means the signal made money on average in this history; the more trades, the more reliable. Groups with under 15 trades are hidden.\n';
+ const bad=Object.entries(B).filter(([k,b])=>k.startsWith('Signal: ')&&b.n>=15&&b.sU/b.n<0).map(([k])=>k.slice(8));
+md+='\n\n**Suggested skipPatterns for watch.json** (negative expectancy, 15+ trades): '+(bad.length?JSON.stringify(bad):'none')+'\n';
+md+='\n\nRead it like this: expectancy above 0R means the signal made money on average in this history; the more trades, the more reliable. Groups with under 15 trades are hidden.\n';
  console.log('\n'+md);if(process.env.GITHUB_STEP_SUMMARY)fs.appendFileSync(process.env.GITHUB_STEP_SUMMARY,md);fs.writeFileSync(path.join(root,'validate-report.json'),JSON.stringify(B,null,1));
  if(process.env.TELEGRAM_BOT_TOKEN&&process.env.TELEGRAM_CHAT_ID){const a=B.ALL;const txt=`📊 Real-market validation\n${series} series, ${a?a.n:0} trades\n`+rows.slice(0,14).map(([k,b])=>`${k}: n=${b.n}, TP1 ${pc(b.h1,b.n)}, SL ${pc(b.sl,b.n)}, exp ${sg(b.sU/b.n)}R / managed ${sg(b.sM/b.n)}R`).join('\n');
   try{await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:process.env.TELEGRAM_CHAT_ID,text:txt.slice(0,4000)})})}catch(e){}}
