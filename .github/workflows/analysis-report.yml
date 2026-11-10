@@ -1,0 +1,40 @@
+name: Real-market analysis report
+on:
+  workflow_dispatch:
+    inputs:
+      coins:
+        description: 'How many top coins'
+        default: '20'
+      timeframes:
+        description: 'Time frames (comma separated)'
+        default: '15m,1h,4h'
+      step:
+        description: 'Walk-forward step in candles (bigger = faster)'
+        default: '6'
+      telegram:
+        description: 'Send a short summary to Telegram'
+        type: boolean
+        default: true
+permissions:
+  contents: read
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/real-eval.js
+        env:
+          COINS: ${{ github.event.inputs.coins }}
+          TFS: ${{ github.event.inputs.timeframes }}
+          STEP: ${{ github.event.inputs.step }}
+          SEND_TELEGRAM: ${{ github.event.inputs.telegram == 'true' && '1' || '0' }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: analysis-report
+          path: report.md
