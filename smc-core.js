@@ -7,6 +7,13 @@ function analyze(c,L=4){
   if(j<i?c[j].low<=c[i].low:c[j].low<c[i].low)l=0}
   if(h)piv.push({t:'H',i,p:c[i].high});if(l)piv.push({t:'L',i,p:c[i].low})}
  piv.sort((a,b)=>a.i-b.i);
+ // keep only meaningful swings: each swing must move at least k x local ATR from the previous one (removes noise pivots)
+ const trs=c.map((x,i)=>i?Math.max(x.high-x.low,Math.abs(x.high-c[i-1].close),Math.abs(x.low-c[i-1].close)):x.high-x.low),atrAt=i=>{let a=0,m=0;for(let j=Math.max(0,i-13);j<=i;j++){a+=trs[j];m++}return a/m};
+ const kS=L<=3?1:L<=5?1.5:L<=6?2:3,zz=[];
+ for(const p of piv){const l=zz[zz.length-1];if(!l){zz.push(p);continue}
+  if(l.t===p.t){if(p.t==='H'?p.p>l.p:p.p<l.p)zz[zz.length-1]=p;continue}
+  if(Math.abs(p.p-l.p)>=kS*atrAt(p.i))zz.push(p)}
+ const pivRaw=piv.slice();piv.length=0;zz.forEach(p=>piv.push(p));
  for(const p of piv){p.st='open';for(let j=p.i+1;j<n;j++){
   if(p.t==='H'&&c[j].high>p.p){p.at=j;p.st=c[j].close<p.p?'sweep':'broke';break}
   if(p.t==='L'&&c[j].low<p.p){p.at=j;p.st=c[j].close>p.p?'sweep':'broke';break}}}
@@ -21,7 +28,7 @@ function analyze(c,L=4){
  for(const e of ev){let m=e.from;
   for(let j=e.from;j<=e.to;j++)if(e.d===1?c[j].low<c[m].low:c[j].high>c[m].high)m=j;
   let k=m;for(let j=m;j>=Math.max(0,m-3);j--){if(e.d===1?c[j].close<c[j].open:c[j].close>c[j].open){k=j;break}}
-  const o={d:e.d,i:k,top:c[k].high,bot:c[k].low,mit:0,k:e.k};
+  const o={d:e.d,i:k,top:c[k].high,bot:c[k].low,mit:0,k:e.k,to:e.to};
   for(let j=e.to+1;j<n;j++)if(e.d===1?c[j].close<o.bot:c[j].close>o.top){o.mit=1;o.end=j;break}
   obs.push(o)}
  // Fair value gaps
@@ -35,6 +42,8 @@ function analyze(c,L=4){
  for(const t of ['H','L']){const ps=piv.filter(p=>p.t===t&&p.st!=='broke');
   for(let a=0;a<ps.length;a++)for(let b=a+1;b<ps.length;b++)if(Math.abs(ps[a].p-ps[b].p)<atr*0.25&&ps[b].i-ps[a].i>=3){
    liq.push({t,p:t==='H'?Math.max(ps[a].p,ps[b].p):Math.min(ps[a].p,ps[b].p),from:ps[a].i,st:ps[b].st,at:ps[b].at});break}}
+ // an order block must come with displacement (an impulse candle or a fair value gap) and not be oversized
+ for(let k=obs.length-1;k>=0;k--){const o=obs[k];if(!(fvg.some(f=>f.d===o.d&&f.i>o.i&&f.i<=o.to)||c.slice(o.i+1,o.to+1).some(x=>(o.d===1?x.close-x.open:x.open-x.close)>=1.2*atr))||o.top-o.bot>3*atr)obs.splice(k,1)}
  // OB + FVG confluence
  for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===o.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
  // IDM (inducement): last minor pullback inside the leg that made each break
@@ -43,9 +52,10 @@ function analyze(c,L=4){
  for(const e of ev.slice(-6)){const q=p2.filter(p=>p.t===(e.d===1?'L':'H')&&p.i>e.from&&p.i<e.to).pop();if(!q)continue;
   let to=e.to;for(let j=q.i+1;j<=e.to;j++)if(e.d===1?c[j].low<q.p:c[j].high>q.p){to=j;break}
   idm.push({d:e.d,p:q.p,i:q.i,to:Math.max(to,q.i+1)})}
- const w=c.slice(-100),hh=Math.max(...w.map(x=>x.high)),ll=Math.min(...w.map(x=>x.low));
+ const lastH=[...piv].reverse().find(p=>p.t==='H'),lastL=[...piv].reverse().find(p=>p.t==='L');let hh,ll;
+ if(lastH&&lastL&&lastH.p>lastL.p){hh=lastH.p;ll=lastL.p}else{const w=c.slice(-100);hh=Math.max(...w.map(x=>x.high));ll=Math.min(...w.map(x=>x.low))}
  const sweepsAll=piv.filter(p=>p.st==='sweep');
- return{atr,piv,ev,obs,fvg,liq,idm,trend,range:{hh,ll,eq:(hh+ll)/2},sweepsAll,sweeps:sweepsAll.slice(-5)};
+ return{atr,piv,pivRaw,ev,obs,fvg,liq,idm,trend,range:{hh,ll,eq:(hh+ll)/2},sweepsAll,sweeps:sweepsAll.slice(-5)};
 }
 function setup(c,A){
  const last=c[c.length-1].close,d=A.trend;if(!d)return null;
@@ -55,10 +65,11 @@ function setup(c,A){
  if(!t)return{d,none:1};
  const z=t[t.length-1],src=z.k?'Order Block':'FVG';
  const entry=(z.top+z.bot)/2,sl=d===1?z.bot-A.atr*0.25:z.top+A.atr*0.25,risk=Math.abs(entry-sl);
+ if(Math.abs(last-entry)>8*A.atr)return{d,none:1,far:1};
  const lv=A.piv.filter(p=>p.st==='open'&&(d===1?p.t==='H'&&p.p>entry:p.t==='L'&&p.p<entry)).map(p=>p.p).sort((a,b)=>d*(a-b));
  const tps=[];
  for(const p of lv){const prev=tps.length?tps[tps.length-1].p:entry;
-  if(tps.length<3&&Math.abs(p-entry)>=risk&&Math.abs(p-prev)>=risk*0.5)tps.push({p,s:'liquidity'})}
+  if(tps.length<3&&Math.abs(p-entry)>=risk*1.5&&Math.abs(p-prev)>=risk*0.5)tps.push({p,s:'liquidity'})}
  for(const m of [1.5,3,4.5]){if(tps.length>=3)break;
   const p=entry+d*risk*m,prev=tps.length?tps[tps.length-1].p:entry;
   if(d*(p-prev)>risk*0.4)tps.push({p,s:'RR'})}
@@ -119,5 +130,5 @@ function backtest(c,step=4,gen){
 }
 function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
  s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
-root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats};if(typeof module!=='undefined')module.exports=root.SMC;
+root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);

@@ -16,7 +16,7 @@ function leg(c,A){
 function prevLeg(A,g){const z=zigzag(A),k=z.findIndex(p=>p.i===g.a.i);if(k<2||z[k-2].t!==z[k].t)return null;return{d:g.d,a:{i:z[k-2].i,p:z[k-2].p},b:{i:z[k-1].i,p:z[k-1].p}}}
 // ov = manual leg override, extra = other legs' levels [{name,levels:[{r,p}]}] for cluster detection
 function fib(c,A,cfg,ov,extra){
- cfg=cfg||DEF;const g=ov||leg(c,A);if(!g)return null;const{d,a,b}=g,R=Math.abs(b.p-a.p),last=c[c.length-1].close;if(!(R>0))return null;
+ cfg=cfg||DEF;const g=ov||leg(c,A);if(!g)return null;const{d,a,b}=g,R=Math.abs(b.p-a.p),last=c[c.length-1].close;if(!(R>0)||(!ov&&R<2.5*A.atr))return null;
  const pr=r=>d>0?b.p-r*R:b.p+r*R,z0=pr(cfg.zone[0]),z1=pr(cfg.zone[1]);
  const levels=cfg.levels.filter(l=>l.on).map(l=>({r:l.r,p:pr(l.r),col:l.col}));
  const zone={lo:Math.min(z0,z1),hi:Math.max(z0,z1)},entry=(z0+z1)/2,sl=d>0?a.p-A.atr*0.25:a.p+A.atr*0.25,risk=Math.abs(entry-sl);
