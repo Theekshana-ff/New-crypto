@@ -1,7 +1,7 @@
 // Shared alerts: in-page toast + sound/vibrate + browser notification + Telegram message
 const Alerts=(()=>{
  const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
- let cfg=Object.assign({on:false,notif:true,sound:true,token:'',chat:'',watch:'',fb:false,fr:false,fn:true,ff:false},ls.get('alCfg',{})),gs,gt,fn,busy=false,actx,panel;
+ let cfg=Object.assign({on:false,notif:true,sound:true,token:'',chat:'',watch:'',fb:true,fr:true,fn:true,ff:true},ls.get('alCfg',{})),gs,gt,fn,busy=false,actx,panel;
  const save=()=>ls.set('alCfg',cfg),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  function beep(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=880;g.gain.value=0.15;o.start();setTimeout(()=>o.stop(),350)}catch(e){}}
  function toast(m){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';t.onclick=()=>t.remove();document.body.appendChild(t)}t.textContent=m;clearTimeout(t._t);t._t=setTimeout(()=>t.remove(),20000)}

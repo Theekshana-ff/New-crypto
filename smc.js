@@ -148,7 +148,7 @@ renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,
 window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),src:'SMC '+T.src,price:S.c[S.c.length-1].close}:null};
 
 Alerts.mount($('ALP'),$('alBtn'));
-Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);if(!T||T.none||!T.inside)return[];
+Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym,tf,500)).slice(0,-1),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);if(!T||T.none||!T.inside)return[];{const G=SMC.grade(T,null);if(!G||G.pts<4)return[]}
  return[{dir:T.d,key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${T.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}]});
 
 function ctxCard(){const T=S.T,ok=T&&!T.none;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}

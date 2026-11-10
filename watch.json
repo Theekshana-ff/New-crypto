@@ -1,7 +1,26 @@
 {
-  "coins": ["BTC", "ETH", "SOL", "BNB", "XRP", "LINK"],
-  "timeframes": ["15m", "1h"],
-  "methods": ["smc", "fib", "patterns"],
-  "filters": { "news": true, "btc": false, "range": false, "funding": false },
+  "coins": [
+    "BTC",
+    "ETH",
+    "SOL",
+    "BNB",
+    "XRP",
+    "LINK"
+  ],
+  "timeframes": [
+    "15m",
+    "1h"
+  ],
+  "methods": [
+    "smc",
+    "fib",
+    "patterns"
+  ],
+  "filters": {
+    "news": true,
+    "btc": true,
+    "range": true,
+    "funding": true
+  },
   "cooldownHours": 6
 }
