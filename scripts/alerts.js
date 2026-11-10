@@ -6,7 +6,7 @@ const TOKEN=process.env.TELEGRAM_BOT_TOKEN,CHAT=process.env.TELEGRAM_CHAT_ID,TES
 const HOSTS=['https://data-api.binance.vision','https://api.binance.us','https://api.binance.com'];
 const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5),tpl=a=>a.map((p,i)=>'TP'+(i+1)+' '+pf(p)).join(' | ');
 async function kl(sym,tf,lim=500){for(const h of HOSTS){try{const r=await fetch(`${h}/api/v3/klines?symbol=${sym}USDT&interval=${tf}&limit=${lim}`);if(!r.ok)continue;const k=await r.json();
-  if(Array.isArray(k)&&k.length)return k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}catch(e){}}throw new Error(`no candles for ${sym} ${tf}`)}
+  if(Array.isArray(k)&&k.length)return k.filter(x=>x[6]<=Date.now()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}catch(e){}}throw new Error(`no candles for ${sym} ${tf}`)}
 async function send(text){if(DRY||!TOKEN||!CHAT){console.log('[not sent]',text.replace(/\n/g,' | '));return}
  const r=await fetch(`https://api.telegram.org/bot${TOKEN}/sendMessage`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chat_id:CHAT,text})});
  if(!r.ok)console.error('Telegram error',r.status,(await r.text()).slice(0,200))}
@@ -31,8 +31,8 @@ function evalCtx(cx,fund,rv,dir,sym){const notes=[],block={},b=cx.btc;
  const state=readState(),now=Date.now(),cd=cfg.cooldownHours*3600e3,cx=await context(),F=cfg.filters||{};let sentN=0;
  for(const sym of cfg.coins)for(const tf of cfg.timeframes){let c;try{c=await kl(sym,tf)}catch(e){console.error(e.message);continue}
   const n=c.length-1,last=c[n].close,A4=SMC.analyze(c,/m$/.test(tf)?5:4),A6=SMC.analyze(c,6),found=[],avg=c.slice(n-20,n).reduce((s,x)=>s+x.vol,0)/20,rv=avg?c[n-1].vol/avg:null;
-  if(cfg.methods.includes('smc')){const T=SMC.setup(c,A4);if(T&&!T.none&&T.inside)found.push({key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,dir:T.d,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${tpl(T.tps.map(t=>t.p))}`})}
-  if(cfg.methods.includes('fib')){const f=FIB.fib(c,A6,FIB.DEF);if(f&&!f.broken&&f.state==='inside'){const g=FIB.grade(f,null);found.push({key:`FIB|${sym}|${tf}|${f.d}|${pf(f.entry)}`,dir:f.d,title:`Fibonacci · ${sym} ${tf}`,text:`${f.d>0?'LONG':'SHORT'}: price is inside the ${f.zr[0]}–${f.zr[1]} zone${g?' (grade '+g.g+')':''}\nEntry ${pf(f.entry)} | SL ${pf(f.sl)}\n${tpl(f.tps.map(t=>t.p))}`})}}
+  if(cfg.methods.includes('smc')){const T=SMC.setup(c,A4);const gS=T&&!T.none?SMC.grade(T,null):null;if(T&&!T.none&&T.inside&&gS&&gS.pts>=4)found.push({key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,dir:T.d,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${tpl(T.tps.map(t=>t.p))}`})}
+  if(cfg.methods.includes('fib')){const f=FIB.fib(c,A6,FIB.DEF);if(f&&!f.broken&&f.state==='inside'){const g=FIB.grade(f,null);if(g&&g.g!=='C')found.push({key:`FIB|${sym}|${tf}|${f.d}|${pf(f.entry)}`,dir:f.d,title:`Fibonacci · ${sym} ${tf}`,text:`${f.d>0?'LONG':'SHORT'}: price is inside the ${f.zr[0]}–${f.zr[1]} zone${g?' (grade '+g.g+')':''}\nEntry ${pf(f.entry)} | SL ${pf(f.sl)}\n${tpl(f.tps.map(t=>t.p))}`})}}
   if(cfg.methods.includes('patterns'))PAT.detect(c,A6).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A6.atr*0.8).slice(0,3).forEach(p=>found.push({key:`PAT|${sym}|${tf}|${p.id}`,dir:p.dir,title:`Pattern · ${sym} ${tf}`,text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${tpl(p.tps.map(t=>t.p))}`}));
   for(const a of found){if(state[a.key]&&now-state[a.key]<cd)continue;
    const e=evalCtx(cx,F.funding?await funding(sym):null,rv,a.dir,sym);
