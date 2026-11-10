@@ -1,0 +1,39 @@
+name: Validate signals on real data
+# Replays real Binance history, measures every signal (fees included) and writes validated.json.
+# Signals with negative expectancy are switched off automatically in the alerts (site + Telegram).
+on:
+  schedule:
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      coins:
+        description: 'How many top coins'
+        default: '20'
+permissions:
+  contents: write
+concurrency:
+  group: validate-signals
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/validate.js
+        env:
+          TFS: '15m,1h,4h'
+          NCOINS: ${{ github.event.inputs.coins || '20' }}
+          CANDLES: '3000'
+          STEP: '6'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      - name: Commit validated.json
+        run: |
+          git config user.name "validation-bot"
+          git config user.email "validation-bot@users.noreply.github.com"
+          git add validated.json
+          git diff --cached --quiet || (git commit -m "Update validated signals" && git push)
