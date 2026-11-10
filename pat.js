@@ -120,7 +120,7 @@ window.getSetup=()=>{const p=cur();return p&&p.dir?{sym:S.sym,tf:S.tf,d:p.dir,en
 
 Alerts.mount($('ALP'),$('alBtn'));
 Alerts.init('Patterns',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym,tf,500)).slice(0,-1),A=SMC.analyze(c,+$('sw').value),last=c[c.length-1].close;
- return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({dir:p.dir,key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
+ return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&!['1-2-3 Reversal Pattern','Three Drives Pattern'].includes(p.names[0])&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({dir:p.dir,trade:{method:'Patterns',sym,tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p)},key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
   text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${p.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}))});
 
 Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false}:null}});

@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Risk calculator</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="top"><div class="row"><button id="menuBtn" aria-label="Menu">&#9776;</button><b>🧮 Risk calculator</b><div class="clock"><div id="time"></div><div id="date"></div></div></div></header>
+<div id="scrim"></div>
+<nav id="drawer"><h3>Menu</h3><a href="index.html">Home</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a><a href="patterns.html">Chart patterns</a><a href="journal.html">Trade journal</a><a href="risk.html">Risk calculator</a><a href="links.html">Other websites</a></nav>
+<main>
+ <section class="card"><h3>Your trade</h3>
+  <div class="rin"><label>Account size ($)<input id="a" type="number" step="any" inputmode="decimal"></label><label>Risk per trade (%)<input id="r" type="number" step="any" inputmode="decimal"></label></div>
+  <div class="rin"><label>Entry<input id="e" type="number" step="any" inputmode="decimal"></label><label>Stop loss<input id="s" type="number" step="any" inputmode="decimal"></label></div>
+  <div class="rin"><label>TP1<input id="t1" type="number" step="any" inputmode="decimal"></label><label>TP2<input id="t2" type="number" step="any" inputmode="decimal"></label><label>TP3<input id="t3" type="number" step="any" inputmode="decimal"></label></div>
+  <div class="rin"><label>Leverage (x)<input id="l" type="number" step="any" inputmode="decimal"></label><label>Fee per side (%)<input id="f" type="number" step="any" inputmode="decimal"></label></div>
+  <p class="msg">Tip: open this page from a setup with ?e=ENTRY&amp;s=SL&amp;t1=TP1 to pre-fill it. Fees are included, so a stop-out costs exactly your risk amount.</p>
+ </section>
+ <section class="card" id="out" style="margin-top:12px"></section>
+</main>
+<script src="risk.js"></script>
+</body></html>

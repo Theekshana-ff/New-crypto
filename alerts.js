@@ -1,7 +1,7 @@
 // Shared alerts: in-page toast + sound/vibrate + browser notification + Telegram message
 const Alerts=(()=>{
  const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
- let cfg=Object.assign({on:false,notif:true,sound:true,token:'',chat:'',watch:'',fb:true,fr:true,fn:true,ff:true},ls.get('alCfg',{})),gs,gt,fn,busy=false,actx,panel;
+ let cfg=Object.assign({on:false,notif:true,sound:true,token:'',chat:'',watch:'',fb:true,fr:true,fn:true,ff:true,fh:true,aj:true},ls.get('alCfg',{})),gs,gt,fn,busy=false,actx,panel;
  const save=()=>ls.set('alCfg',cfg),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
  function beep(){try{actx=actx||new(window.AudioContext||window.webkitAudioContext)();const o=actx.createOscillator(),g=actx.createGain();o.connect(g);g.connect(actx.destination);o.frequency.value=880;g.gain.value=0.15;o.start();setTimeout(()=>o.stop(),350)}catch(e){}}
  function toast(m){let t=document.getElementById('toast');if(!t){t=document.createElement('div');t.id='toast';t.className='toast';t.onclick=()=>t.remove();document.body.appendChild(t)}t.textContent=m;clearTimeout(t._t);t._t=setTimeout(()=>t.remove(),20000)}
@@ -19,7 +19,9 @@ const Alerts=(()=>{
      if(window.Ctx&&a.dir){try{const cx=await Ctx.get(sym,null,gt()),e=Ctx.eval(cx,a.dir,sym);
       if((cfg.fn&&e.block.news)||(cfg.fb&&e.block.btc)||(cfg.fr&&e.block.range)||(cfg.ff&&e.block.fund))continue;
       a.text+='\nContext: '+e.notes.map(n=>(n.ok===true?'✓ ':n.ok===false?'✗ ':'• ')+n.text).join('; ')}catch(x){}}
-     sent[a.key]=now;ls.set('alSent',sent);await fire(a)}}
+     if(cfg.fh&&window.HTF&&a.dir){try{const b=await HTF.bias(sym);if(HTF.against(b,a.dir))continue;a.text+='\nHTF: 1D '+HTF.T(b.d1)+' · 4H '+HTF.T(b.h4)}catch(x){}}
+     sent[a.key]=now;ls.set('alSent',sent);await fire(a);
+     if(cfg.aj&&a.trade&&window.Ctx){const J=ls.get('alJ',[]);if(!J.includes(a.key)){J.push(a.key);ls.set('alJ',J.slice(-200));Ctx.addTrade(a.trade)}}}}
    for(const k in sent)if(now-sent[k]>24*3600e3)delete sent[k];ls.set('alSent',sent)}finally{busy=false}}
  function log(){if(!panel)return;const l=ls.get('alLog',[]);panel.querySelector('#al_log').innerHTML=l.length?l.map(x=>`<div class="msg">${new Date(x.t).toLocaleTimeString()} · ${esc(x.s)}</div>`).join(''):'<div class="msg">No alerts yet.</div>'}
  function mount(el,btn){panel=el;
@@ -33,6 +35,8 @@ const Alerts=(()=>{
   <h3 style="margin-top:12px">Filters (skip alerts when…)</h3>
   <label class="alr"><input type="checkbox" id="al_fn"> high-impact US news is within ±30–60 min</label>
   <label class="alr"><input type="checkbox" id="al_fb"> setup is against the BTC trend</label>
+  <label class="alr"><input type="checkbox" id="al_fh"> setup is against the daily (1D) trend of the coin</label>
+  <label class="alr"><input type="checkbox" id="al_aj"> Auto-add fired alerts to the Trade journal</label>
   <label class="alr"><input type="checkbox" id="al_fr"> BTC is ranging</label>
   <label class="alr"><input type="checkbox" id="al_ff"> funding shows crowded positioning</label>
   <label class="alr">Watch more coins (comma separated)<input id="al_w" placeholder="ETH,SOL,LINK"></label>
@@ -40,7 +44,7 @@ const Alerts=(()=>{
   <p class="msg">Alerts වැඩ කරන්නේ මේ page එක (tab එක) open වෙලා තියෙනකම් විතරයි. Phone එකේ screen එක off වුණොත් browser එක ඒක නවත්තන්න පුළුවන්.</p>`;
   const q=id=>el.querySelector('#'+id);q('al_on').checked=cfg.on;q('al_s').checked=cfg.sound;q('al_n').checked=cfg.notif;q('al_t').value=cfg.token;q('al_c').value=cfg.chat;q('al_w').value=cfg.watch;
   q('al_on').onchange=e=>{cfg.on=e.target.checked;save();if(cfg.on){beep();run()}};q('al_s').onchange=e=>{cfg.sound=e.target.checked;save()};q('al_n').onchange=e=>{cfg.notif=e.target.checked;save()};
-  ['fn','fb','fr','ff'].forEach(k=>{q('al_'+k).checked=cfg[k];q('al_'+k).onchange=e=>{cfg[k]=e.target.checked;save()}});q('al_w').onchange=e=>{cfg.watch=e.target.value;save()};
+  ['fn','fb','fr','ff','fh','aj'].forEach(k=>{q('al_'+k).checked=cfg[k];q('al_'+k).onchange=e=>{cfg[k]=e.target.checked;save()}});q('al_w').onchange=e=>{cfg.watch=e.target.value;save()};
   q('al_p').onclick=async()=>{try{const p=await Notification.requestPermission();q('al_m').textContent='Notifications: '+p}catch(e){q('al_m').textContent='Not supported here'}};
   q('al_test').onclick=async()=>{cfg.token=q('al_t').value.trim();cfg.chat=q('al_c').value.trim();save();q('al_m').textContent='Sending...';
    const r=await tg('✅ Test message from your crypto site');q('al_m').textContent=r===true?'Sent ✓':r==='unknown'?'Sent (check Telegram)':'Failed. Check token / chat id.'};

@@ -20,7 +20,12 @@
     "news": true,
     "btc": true,
     "range": true,
-    "funding": true
+    "funding": true,
+    "htf": true
   },
-  "cooldownHours": 6
+  "cooldownHours": 6,
+  "skipPatterns": [
+    "1-2-3 Reversal Pattern",
+    "Three Drives Pattern"
+  ]
 }

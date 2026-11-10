@@ -17,9 +17,9 @@ const lastTwo=a=>{const n=a.length-1;return[a[n],a[n-1]]};
 function rate(c){
  const cl=c.map(x=>x.close),hi=c.map(x=>x.high),lo=c.map(x=>x.low),vo=c.map(x=>x.vol||0),n=c.length-1,P=cl[n],items=[],add=(name,s)=>items.push({name,s});
  // oscillators
- const r=lastTwo(rsi(cl)),st=stoch(cl,hi,lo,14),cci=(()=>{const tp=c.map(x=>(x.high+x.low+x.close)/3),m=sma(tp,20);return tp.map((v,i)=>{if(!ok(m[i]))return NaN;let d=0;for(let j=i-19;j<=i;j++)d+=Math.abs(tp[j]-m[i]);return(v-m[i])/(0.015*(d/20)||1)})})(),
-  cc=lastTwo(cci),ad=adx(hi,lo,cl),md=c.map(x=>(x.high+x.low)/2),ao=sma(md,5).map((v,i)=>v-sma(md,34)[i]),mom=cl.map((v,i)=>i<10?NaN:v-cl[i-10]),
-  e12=ema(cl,12),e26=ema(cl,26),macd=e12.map((v,i)=>v-e26[i]),sig=ema(macd,9),rs=rsi(cl),srs=stoch(rs,null,null,14),
+ const rs=rsi(cl),r=lastTwo(rs),st=stoch(cl,hi,lo,14),cci=(()=>{const tp=c.map(x=>(x.high+x.low+x.close)/3),m=sma(tp,20);return tp.map((v,i)=>{if(!ok(m[i]))return NaN;let d=0;for(let j=i-19;j<=i;j++)d+=Math.abs(tp[j]-m[i]);return(v-m[i])/(0.015*(d/20)||1)})})(),
+  cc=lastTwo(cci),ad=adx(hi,lo,cl),md=c.map(x=>(x.high+x.low)/2),ao=(s34=>sma(md,5).map((v,i)=>v-s34[i]))(sma(md,34)),mom=cl.map((v,i)=>i<10?NaN:v-cl[i-10]),
+  e12=ema(cl,12),e26=ema(cl,26),macd=e12.map((v,i)=>v-e26[i]),sig=ema(macd,9),srs=stoch(rs,null,null,14),
   wr=cl.map((v,i)=>i<13?NaN:(hh(hi,i,14)-v)/((hh(hi,i,14)-ll(lo,i,14))||1)*-100),e13=ema(cl,13);
  add('RSI(14)',r[0]<30&&r[0]>r[1]?1:r[0]>70&&r[0]<r[1]?-1:0);
  add('Stochastic %K',st.k[n]<20&&st.d[n]<20&&st.k[n]>st.d[n]?1:st.k[n]>80&&st.d[n]>80&&st.k[n]<st.d[n]?-1:0);
@@ -39,7 +39,7 @@ function rate(c){
  for(const k of[10,20,30,50,100,200]){const s=sma(cl,k)[n],e=ema(cl,k)[n];add('SMA '+k,!ok(s)?0:P>s?1:P<s?-1:0);add('EMA '+k,!ok(e)?0:P>e?1:P<e?-1:0)}
  const ten=(hh(hi,n,9)+ll(lo,n,9))/2,kij=(hh(hi,n,26)+ll(lo,n,26))/2;add('Ichimoku base',P>kij&&ten>kij?1:P<kij&&ten<kij?-1:0);
  let pv=0,vv=0;for(let j=n-19;j<=n;j++){pv+=cl[j]*vo[j];vv+=vo[j]}const vw=vv?pv/vv:NaN;add('VWMA(20)',!ok(vw)?0:P>vw?1:P<vw?-1:0);
- const hm=wma(cl.map((_,i)=>2*wma(cl,4)[i]-wma(cl,9)[i]),3);add('Hull MA(9)',hm[n]>hm[n-1]?1:hm[n]<hm[n-1]?-1:0);
+ const w4=wma(cl,4),w9=wma(cl,9),hm=wma(cl.map((_,i)=>2*w4[i]-w9[i]),3);add('Hull MA(9)',hm[n]>hm[n-1]?1:hm[n]<hm[n-1]?-1:0);
  const buy=items.filter(x=>x.s>0).length,sell=items.filter(x=>x.s<0).length,neu=items.length-buy-sell,score=(buy-sell)/items.length;
  return{buy,sell,neutral:neu,total:items.length,score,label:score<=-0.5?'Strong Sell':score<-0.1?'Sell':score<=0.1?'Neutral':score<0.5?'Buy':'Strong Buy',items};
 }
