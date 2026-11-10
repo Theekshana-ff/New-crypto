@@ -1,5 +1,30 @@
 {
- "generated": null,
+ "generated": "2026-11-10T12:50:10.786Z",
+ "coins": [
+  "BTC",
+  "ETH",
+  "ZEC",
+  "SOL",
+  "XRP",
+  "RLUSD",
+  "PEPE",
+  "AVAX",
+  "NEAR",
+  "HYPE",
+  "UNI",
+  "SUI",
+  "ENA",
+  "DOGE",
+  "ONE",
+  "TRX",
+  "ONDO",
+  "RWUSD",
+  "LINK",
+  "GRAM"
+ ],
+ "fee": 0.0012,
+ "candles": 3000,
+ "tested": 198,
  "enabled": [],
- "note": "Filled automatically by the 'Find working signals on real data' workflow."
+ "note": "No rule passed the real-data tests, so no strategy alerts are sent. That is a valid result."
 }
