@@ -151,3 +151,6 @@ Alerts.init('Fibonacci',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym
 function ctxCard(){const F=S.F;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:F?F.d:0,G:F?FIB.grade(F,S.rx):null})}
 {const _rf=refit;refit=function(){_rf.apply(this,arguments);ctxCard()}}
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.F)return;const F=S.F;Ctx.addTrade({method:'Fibonacci',sym:S.sym,tf:S.tf,d:F.d,entry:F.entry,sl:F.sl,tps:F.tps.map(t=>t.p)})});
+
+function evCard(){const F=S.F;Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'FIB',gen:(sl,A)=>{const q=FIB.fib(sl,A,CFG);if(!q||q.broken)return null;return{...q,key:q.d+'_'+q.leg.a.i,conf:q.conf.length>0}},setup:F?{d:F.d,entry:F.entry,sl:F.sl,tps:F.tps}:null})}
+{const _c=ctxCard;ctxCard=function(){_c.apply(this,arguments);evCard()}}

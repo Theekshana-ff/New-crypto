@@ -154,3 +154,6 @@ Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym,tf,50
 function ctxCard(){const T=S.T,ok=T&&!T.none;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}
 {const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none)return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p)})});
+
+function evCard(){const T=S.T;Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'SMC',gen:null,setup:T&&!T.none?{d:T.d,entry:T.entry,sl:T.sl,tps:T.tps}:null})}
+{const _c=ctxCard;ctxCard=function(){_c.apply(this,arguments);evCard()}}

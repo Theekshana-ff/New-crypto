@@ -127,3 +127,6 @@ Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.de
 function ctxCard(){const p=cur();Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:p?p.dir:0,G:null})}
 {const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn')return;const p=cur();if(!p||!p.dir)return;Ctx.addTrade({method:'Patterns',sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),brk:p.brk})});
+
+function evCard(){const p=cur();Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'PAT'+(p?p.names[0]:''),gen:(sl,A)=>{const q=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return q?{d:q.dir,entry:q.entry,sl:q.sl,tps:q.tps,key:q.id,conf:false,brk:q.brk}:null},setup:p&&p.dir?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps}:null})}
+{const _c=ctxCard;ctxCard=function(){_c.apply(this,arguments);evCard()}}

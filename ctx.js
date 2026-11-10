@@ -56,5 +56,20 @@ const Ctx=(()=>{
     const r=SMC.mergeStats(res),pc=(a,b)=>b?(a/b*100).toFixed(0)+'%':'-',sg=x=>(x>=0?'+':'')+x.toFixed(2)+'R';
     out.innerHTML=r.resolved?`<p>${coins.length} coin(s) × ${tfs.length} time frame(s): setups <b>${r.setups}</b>, finished trades <b>${r.resolved}</b></p><p class="up">TP1 hit: <b>${pc(r.wins,r.resolved)}</b> · TP2: ${pc(r.tp2,r.resolved)} · TP3: ${pc(r.tp3,r.resolved)}</p><p class="down">SL first: <b>${pc(r.losses,r.resolved)}</b></p><p>Expectancy per trade: <b>${sg(r.exp)}</b> exit all at TP1 · <b>${sg(r.expM)}</b> managed (50% at TP1, stop to breakeven, rest to TP2)</p><p>With SMC confluence: ${r.strongN?pc(r.strongWin,r.strongN)+' win ('+r.strongN+' trades)':'none'}</p><p class="msg">Past results do not guarantee future results. Fees and slippage are not included.</p>`:'<p class="msg">Not enough finished setups. Try more coins or time frames.</p>'}
    catch(e){out.textContent='Could not run the backtest right now.'}}}
- return{get,eval:evalCtx,regrade,card,addTrade,evalTrade,journal,kl,mountBacktest,toast,ls,pf};
+
+ // honest check of a trade plan: logical order, fees, break-even win rate, and the method's own record on this coin
+ const evCache={};
+ async function evidence(el,o){if(!el)return;const s=o.setup;
+  if(!s||!s.entry||!s.sl||!s.tps||!s.tps.length){el.innerHTML='<h3>Reality check</h3><p class="msg">No trade plan on this chart right now.</p>';return}
+  const FEE=0.0012,risk=Math.abs(s.entry-s.sl),p1=s.tps[0].p,rr1=Math.abs(p1-s.entry)/risk,feeR=FEE*s.entry/risk,be=(1+feeR)/(rr1+1),ok=s.d>0?(s.sl<s.entry&&s.entry<p1):(p1<s.entry&&s.entry<s.sl);
+  const h='<h3>Reality check</h3>'+`<p>Stop distance <b>${(risk/s.entry*100).toFixed(2)}%</b> · TP1 = <b>${rr1.toFixed(2)}R</b> · fees ≈ <b>${feeR.toFixed(2)}R</b> per trade</p><p>To break even at TP1 this trade must win <b>${(be*100).toFixed(0)}%</b> of the time.</p>`+(ok?'':'<p class="down">⚠ Entry / SL / TP are not in a logical order. Do not trade this.</p>')+(feeR>0.25?'<p class="down">⚠ The stop is so tight that fees take over a quarter of every loss.</p>':'');
+  const key=o.sym+'|'+o.tf+'|'+o.method;let r=evCache[key];
+  if(!r||Date.now()-r.t>600000){el.innerHTML=h+'<p class="msg">Testing this method on the last 1000 candles of this coin...</p>';
+   try{r={t:Date.now(),v:SMC.backtest(await kl(o.sym,o.tf,1000),4,o.gen)};evCache[key]=r}catch(e){el.innerHTML=h+'<p class="msg">History test is not available right now.</p>';return}}
+  const v=r.v,n=v.resolved,w=n?v.wins/n:0,exp=v.exp-feeR;let msg,cls='';
+  if(n<30)msg='Not enough past trades on this coin to judge this method.';
+  else if(exp>0.1&&w>be+0.05){msg='Past results on this coin were positive after fees. This is still not a guarantee.';cls='up'}
+  else{msg='No proven edge on this coin and time frame. Treat this as chart analysis only, not as a trading signal.';cls='down'}
+  el.innerHTML=h+`<p>Record of this method on this coin (${o.tf}): <b>${n}</b> trades · TP1 hit <b>${(w*100).toFixed(0)}%</b> · average <b>${exp>=0?'+':''}${exp.toFixed(2)}R</b> per trade after fees</p><p class="${cls}"><b>${msg}</b></p><p class="msg">Based on the last 1000 candles only. Tests across many coins found no method with a reliable edge, so always risk a small, fixed amount.</p>`}
+ return{evidence,get,eval:evalCtx,regrade,card,addTrade,evalTrade,journal,kl,mountBacktest,toast,ls,pf};
 })();
