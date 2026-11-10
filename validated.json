@@ -1,10 +1,261 @@
 {
- "generated": "2026-11-10",
- "note": "Chart-analysis signals (SMC / Fibonacci / patterns) lost money on real data: -0.55R per trade on 12071 trades. Switched off.",
+ "generated": "2026-11-10T08:18:56.210Z",
+ "series": 58,
+ "candles": 3000,
+ "roundTripCost": 0.001,
+ "minTrades": 20,
+ "signals": {
+  "Method: FIB": {
+   "n": 3552,
+   "tp1": 0.422,
+   "sl": 0.578,
+   "expU": -0.394,
+   "expM": -0.391
+  },
+  "Signal: Fibonacci": {
+   "n": 3552,
+   "tp1": 0.422,
+   "sl": 0.578,
+   "expU": -0.394,
+   "expM": -0.391
+  },
+  "Time frame: 15m": {
+   "n": 3139,
+   "tp1": 0.414,
+   "sl": 0.586,
+   "expU": -0.548,
+   "expM": -0.547
+  },
+  "Method: PAT": {
+   "n": 3972,
+   "tp1": 0.511,
+   "sl": 0.489,
+   "expU": -0.252,
+   "expM": -0.247
+  },
+  "Signal: Symmetrical Triangle": {
+   "n": 190,
+   "tp1": 0.253,
+   "sl": 0.747,
+   "expU": -0.845,
+   "expM": -0.905
+  },
+  "Method: SMC": {
+   "n": 1619,
+   "tp1": 0.16,
+   "sl": 0.84,
+   "expU": -0.678,
+   "expM": -0.679
+  },
+  "Signal: SMC FVG": {
+   "n": 204,
+   "tp1": 0.123,
+   "sl": 0.877,
+   "expU": -1.323,
+   "expM": -1.25
+  },
+  "Signal: SMC Order Block": {
+   "n": 1415,
+   "tp1": 0.165,
+   "sl": 0.835,
+   "expU": -0.585,
+   "expM": -0.597
+  },
+  "Signal: Double Top": {
+   "n": 128,
+   "tp1": 0.742,
+   "sl": 0.258,
+   "expU": -0.029,
+   "expM": 0.015
+  },
+  "Signal: 1-2-3 Reversal Pattern": {
+   "n": 790,
+   "tp1": 0.542,
+   "sl": 0.458,
+   "expU": -0.211,
+   "expM": -0.209
+  },
+  "Signal: Rising Wedge": {
+   "n": 183,
+   "tp1": 0.607,
+   "sl": 0.393,
+   "expU": -0.093,
+   "expM": -0.053
+  },
+  "Signal: Bear Flag": {
+   "n": 243,
+   "tp1": 0.465,
+   "sl": 0.535,
+   "expU": 0.065,
+   "expM": 0.068
+  },
+  "Signal: Bear Pennant": {
+   "n": 128,
+   "tp1": 0.414,
+   "sl": 0.586,
+   "expU": -0.068,
+   "expM": -0.178
+  },
+  "Signal: Rounding Bottom": {
+   "n": 230,
+   "tp1": 0.674,
+   "sl": 0.326,
+   "expU": -0.145,
+   "expM": -0.148
+  },
+  "Signal: Bull Pennant": {
+   "n": 82,
+   "tp1": 0.427,
+   "sl": 0.573,
+   "expU": -0.155,
+   "expM": -0.076
+  },
+  "Signal: Cup and Handle": {
+   "n": 70,
+   "tp1": 0.243,
+   "sl": 0.757,
+   "expU": -0.74,
+   "expM": -0.683
+  },
+  "Signal: Double Bottom": {
+   "n": 166,
+   "tp1": 0.681,
+   "sl": 0.319,
+   "expU": -0.138,
+   "expM": -0.108
+  },
+  "Signal: Descending Triangle": {
+   "n": 174,
+   "tp1": 0.437,
+   "sl": 0.563,
+   "expU": -0.547,
+   "expM": -0.477
+  },
+  "Signal: Bull Flag": {
+   "n": 190,
+   "tp1": 0.374,
+   "sl": 0.626,
+   "expU": -0.193,
+   "expM": -0.146
+  },
+  "Signal: Inverted Cup and Handle": {
+   "n": 58,
+   "tp1": 0.5,
+   "sl": 0.5,
+   "expU": 0.134,
+   "expM": 0.126
+  },
+  "Signal: Rounding Top": {
+   "n": 244,
+   "tp1": 0.787,
+   "sl": 0.213,
+   "expU": -0.003,
+   "expM": 0.003
+  },
+  "Signal: Falling Wedge": {
+   "n": 289,
+   "tp1": 0.533,
+   "sl": 0.467,
+   "expU": -0.195,
+   "expM": -0.206
+  },
+  "Signal: ABCD Pattern": {
+   "n": 64,
+   "tp1": 0.109,
+   "sl": 0.891,
+   "expU": -1.805,
+   "expM": -1.831
+  },
+  "Signal: Dead Cat Bounce": {
+   "n": 181,
+   "tp1": 0.575,
+   "sl": 0.425,
+   "expU": 0.218,
+   "expM": 0.206
+  },
+  "Signal: Ascending Triangle": {
+   "n": 146,
+   "tp1": 0.418,
+   "sl": 0.582,
+   "expU": -0.582,
+   "expM": -0.591
+  },
+  "Time frame: 1h": {
+   "n": 3027,
+   "tp1": 0.414,
+   "sl": 0.586,
+   "expU": -0.393,
+   "expM": -0.398
+  },
+  "Signal: Quasimodo Pattern": {
+   "n": 81,
+   "tp1": 0.605,
+   "sl": 0.395,
+   "expU": -0.017,
+   "expM": -0.05
+  },
+  "Signal: Inverse Head and Shoulders": {
+   "n": 79,
+   "tp1": 0.342,
+   "sl": 0.658,
+   "expU": -0.611,
+   "expM": -0.611
+  },
+  "Signal: Head and Shoulders": {
+   "n": 78,
+   "tp1": 0.615,
+   "sl": 0.385,
+   "expU": 0.126,
+   "expM": 0.174
+  },
+  "Time frame: 4h": {
+   "n": 2977,
+   "tp1": 0.416,
+   "sl": 0.584,
+   "expU": -0.198,
+   "expM": -0.182
+  },
+  "Signal: Shark Pattern": {
+   "n": 29,
+   "tp1": 0.138,
+   "sl": 0.862,
+   "expU": -1.22,
+   "expM": -1.164
+  },
+  "Signal: Wolfe Wave": {
+   "n": 40,
+   "tp1": 0.05,
+   "sl": 0.95,
+   "expU": -1.142,
+   "expM": -1.337
+  }
+ },
  "disabled": [
-  "Method: SMC",
   "Method: FIB",
-  "Method: PAT"
- ],
- "signals": {}
+  "Signal: Fibonacci",
+  "Time frame: 15m",
+  "Method: PAT",
+  "Signal: Symmetrical Triangle",
+  "Method: SMC",
+  "Signal: SMC FVG",
+  "Signal: SMC Order Block",
+  "Signal: 1-2-3 Reversal Pattern",
+  "Signal: Rising Wedge",
+  "Signal: Bear Pennant",
+  "Signal: Rounding Bottom",
+  "Signal: Bull Pennant",
+  "Signal: Cup and Handle",
+  "Signal: Double Bottom",
+  "Signal: Descending Triangle",
+  "Signal: Bull Flag",
+  "Signal: Falling Wedge",
+  "Signal: ABCD Pattern",
+  "Signal: Ascending Triangle",
+  "Time frame: 1h",
+  "Signal: Quasimodo Pattern",
+  "Signal: Inverse Head and Shoulders",
+  "Time frame: 4h",
+  "Signal: Shark Pattern",
+  "Signal: Wolfe Wave"
+ ]
 }
