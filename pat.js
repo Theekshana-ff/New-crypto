@@ -86,7 +86,7 @@ function renderD(){const p=cur();let h='<h3>විස්තරය</h3>';if(!p){$
  else h+='<p class="msg">මේ pattern එකට breakout setup එකක් නෑ. කැඩෙන පැත්ත බලලා ඊට පස්සේ trade කරන්න.</p>';
  h+='<p class="msg">Auto analysis එකක් විතරයි, financial advice නෙවෙයි. Pattern හඳුනාගැනීම සමහර වෙලාවට වැරදෙන්න පුළුවන්.</p>';
  $('D').innerHTML=h;
- if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('patSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),t:Math.floor(Date.now()/1000),name:p.names[0]});ls.set('patSaved',l.slice(0,20));renderSV()}}
+ if($('saveBtn'))$('saveBtn').onclick=()=>{const l=ls.get('patSaved',[]);l.unshift({sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),t:Math.floor(Date.now()/1000),name:p.names[0],brk:p.brk});ls.set('patSaved',l.slice(0,20));renderSV()}}
 function renderR(){const r=ls.get('smcRisk',{a:1000,r:1});
  if(!$('ra')){$('R').innerHTML=`<h3>Risk calculator</h3><div class="rin"><label>Account $<input id="ra" type="number" min="1" value="${r.a}"></label><label>Risk %<input id="rr" type="number" min="0.1" step="0.1" value="${r.r}"></label></div><div id="rout"></div>`;
   ['ra','rr'].forEach(i=>$(i).oninput=()=>{ls.set('smcRisk',{a:+$('ra').value,r:+$('rr').value});renderR()})}
@@ -123,7 +123,7 @@ Alerts.init('Patterns',()=>S.sym,()=>S.tf,async(sym,tf)=>{const c=(await kl(sym,
  return PAT.detect(c,A).filter(p=>p.dir&&p.tps&&!['1-2-3 Reversal Pattern','Three Drives Pattern'].includes(p.names[0])&&Math.abs(last-p.entry)<=A.atr*0.8).slice(0,3).map(p=>({m:'PAT',sig:p.names[0],dir:p.dir,trade:{method:'Patterns',sym,tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p)},key:`PAT|${sym}|${tf}|${p.id}`,title:`Pattern · ${sym} ${tf}`,
   text:`${p.names[0]} (${p.status})\n${p.dir>0?'LONG':'SHORT'} entry ${pf(p.entry)} | SL ${pf(p.sl)}\n${p.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}))});
 
-Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false}:null}});
+Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false,brk:p.brk}:null}});
 function ctxCard(){const p=cur();Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:p?p.dir:0,G:null})}
 {const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
-document.addEventListener('click',e=>{if(e.target.id!=='jBtn')return;const p=cur();if(!p||!p.dir)return;Ctx.addTrade({method:'Patterns',sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p)})});
+document.addEventListener('click',e=>{if(e.target.id!=='jBtn')return;const p=cur();if(!p||!p.dir)return;Ctx.addTrade({method:'Patterns',sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),brk:p.brk})});

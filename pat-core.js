@@ -13,7 +13,7 @@ const COL={bull:'#2ecc9a',bear:'#ff5d6c',neutral:'#f0b429'};
 const inr=(v,r)=>v>=r[0]&&v<=r[1];
 function detect(c,A){
  const z=zigzag(A),n=c.length-1,atr=A.atr,last=c[n].close,tol=atr*0.6,out=[],ago=i=>n-i;
- const add=o=>{o.names=o.names||[o.name];o.name=o.names[0];o.col=COL[o.bias];o.id=o.name+'_'+o.start;o.end=o.end??n;
+ const add=o=>{o.names=o.names||[o.name];o.name=o.names[0];o.col=COL[o.bias];o.id=o.name+'_'+o.start;o.end=o.end??n;o.brk=o.dir>0?o.entry>last:o.dir<0?o.entry<last:false;
   if(o.dir&&o.entry!=null){const risk=Math.abs(o.entry-o.sl)||atr;o.tps=(o.ks||[0.5,1,1.618]).map(k=>{const p=o.entry+o.dir*o.H*k;return{p,rr:Math.abs(p-o.entry)/risk}})}else o.dir=0;out.push(o)};
  const first=(len,fn)=>{for(let k=z.length-1;k>=len-1;k--){const r=fn(z.slice(k-len+1,k+1));if(r)return r}return null};
  const sig=(pt,top)=>{const lo=Math.max(0,pt.i-40),w=c.slice(lo,pt.i+1);return top?pt.p>=Math.max(...w.map(x=>x.high))-0.5*atr:pt.p<=Math.min(...w.map(x=>x.low))+0.5*atr};

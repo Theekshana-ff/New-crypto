@@ -39,7 +39,7 @@ const Ctx=(()=>{
  function addTrade(t){const r=ls.get('smcRisk',{a:1000,r:1}),l=journal();l.unshift({...t,id:Date.now(),t:Math.floor(Date.now()/1000),risk:r.a*r.r/100});ls.set('journal',l.slice(0,200));toast('Added to Trade journal ✓')}
  function evalTrade(s,c,mg){const long=s.d===1,rr1=Math.abs(s.tps[0]-s.entry)/Math.abs(s.entry-s.sl),rr2=Math.abs(s.tps[1]-s.entry)/Math.abs(s.entry-s.sl);let st='pending',hit=0,stop=s.sl;
   for(const k of c){const lo=k.low,hi=k.high;
-   if(st==='pending'){if(long?lo<=s.entry:hi>=s.entry){st='open';if(long?lo<=s.sl:hi>=s.sl){st='sl';break}continue}if(long?hi>=s.tps[0]:lo<=s.tps[0]){st='missed';break}continue}
+   if(st==='pending'){const en=s.brk?(long?hi>=s.entry:lo<=s.entry):(long?lo<=s.entry:hi>=s.entry),slh=long?lo<=s.sl:hi>=s.sl;if(en){st='open';if(slh){st='sl';break}continue}if(s.brk?slh:(long?hi>=s.tps[0]:lo<=s.tps[0])){st='missed';break}continue}
    if(long?lo<=stop:hi>=stop){st=hit?(mg?'be':'tp'):'sl';break}
    s.tps.forEach((p,i)=>{if(long?hi>=p:lo<=p)hit=Math.max(hit,i+1)});if(mg&&hit>=1)stop=s.entry;
    if(mg?hit>=2:hit>=1){st='tp';break}}

@@ -96,27 +96,39 @@ function grade(T,td){if(!T||T.none)return null;
  return{g:pts>=8?'A+':pts>=6?'A':pts>=4?'B':'C',pts,max:10,aligned:al}}
 // Status of a saved setup, c = candles after it was saved
 function evalSaved(s,c){
- const long=s.d===1;let st='pending',hit=0;
- for(const k of c){const lo=k.low,hi=k.high,en=long?lo<=s.entry:hi>=s.entry,slh=long?lo<=s.sl:hi>=s.sl;
+ const long=s.d===1,brk=!!s.brk;let st='pending',hit=0;
+ for(const k of c){const lo=k.low,hi=k.high,en=brk?(long?hi>=s.entry:lo<=s.entry):(long?lo<=s.entry:hi>=s.entry),slh=long?lo<=s.sl:hi>=s.sl;
   if(st==='pending'){if(en){st='entered';if(slh){st='sl';break}continue}
-   if(long?hi>=s.tps[0]:lo<=s.tps[0]){st='missed';break}}
+   if(brk?slh:(long?hi>=s.tps[0]:lo<=s.tps[0])){st='missed';break}}
   else{if(slh){st='sl';break}s.tps.forEach((p,i)=>{if(long?hi>=p:lo<=p)hit=Math.max(hit,i+1)})}}
  if(hit&&st==='entered')st='tp';
  return{st,hit};
 }
 // Walk-forward backtest (no look-ahead). Modes: 0 = exit all at TP1, 1 = managed (50% at TP1, stop to breakeven, runner to TP2), 2 = stats (TP reach before original SL)
 function sim(S,c,t,mg){
- const long=S.d===1,rr=S.tps.map(x=>x.rr);let fill=-1,hit=0,stop=S.sl;const out=(h,R,sl)=>({hit:h,R,sl,strong:!!S.conf});
+ const long=S.d===1,rr=S.tps.map(x=>x.rr),brk=!!S.brk;let fill=-1,hit=0,stop=S.sl;const out=(h,R,sl)=>({hit:h,R,sl,strong:!!S.conf});
  for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high;
   if(fill<0){if(j>t+60)return null;
-   if(long?lo<=S.entry:hi>=S.entry){fill=j;if(long?lo<=S.sl:hi>=S.sl)return out(0,-1,1)}
-   else if(long?hi>=S.tps[0].p:lo<=S.tps[0].p)return null;
+   if(brk?(long?hi>=S.entry:lo<=S.entry):(long?lo<=S.entry:hi>=S.entry)){fill=j;if(long?lo<=S.sl:hi>=S.sl)return out(0,-1,1)}
+   else if(brk?(long?lo<=S.sl:hi>=S.sl):(long?hi>=S.tps[0].p:lo<=S.tps[0].p))return null;
    continue}
   if(long?lo<=stop:hi>=stop)return hit?out(hit,mg===1?0.5*rr[0]:rr[0],0):out(0,-1,1);
   S.tps.forEach((q,i)=>{if(long?hi>=q.p:lo<=q.p)hit=Math.max(hit,i+1)});
   if(mg===1&&hit>=1)stop=S.entry;
   if(mg===1?hit>=2:mg===0?hit>=1:hit>=3)return out(hit,mg===1?0.5*rr[0]+0.5*rr[1]:rr[0],0)}
  return mg===2&&hit?out(hit,rr[0],0):null;
+}
+// Variant simulator for tuning: o = {entry:'touch'|'confirm', sl:'struct'|'atr', k, exit:'struct'|'fixed', rr:[..], tp:1..3}
+function simX(S,c,t,o){
+ const d=S.d,long=d===1,brk=!!S.brk;let fill=-1,fp=0,sl=S.sl,risk=0,tgt=0;
+ for(let j=t+1;j<Math.min(c.length,t+400);j++){const k=c[j],lo=k.low,hi=k.high,cl=k.close,slh=x=>long?lo<=x:hi>=x;
+  if(fill<0){if(j>t+60)return null;const reach=brk?(long?hi>=S.entry:lo<=S.entry):(long?lo<=S.entry:hi>=S.entry),ok=reach&&(o.entry==='touch'||(long?cl>S.entry:cl<S.entry));
+   if(!ok){if(brk?slh(S.sl):(long?hi>=S.tps[0].p:lo<=S.tps[0].p))return null;continue}
+   fill=j;fp=o.entry==='touch'?S.entry:cl;sl=o.sl==='atr'?fp-d*o.k*S.atr:S.sl;risk=d*(fp-sl);if(!(risk>0))return null;
+   const ps=o.exit==='fixed'?o.rr.map(r=>fp+d*risk*r):S.tps.map(x=>x.p).filter(p=>d*(p-fp)>0);if(!ps.length)return null;tgt=ps[Math.min(o.tp||1,ps.length)-1];
+   if(slh(sl))return{R:-1,hit:0};continue}
+  if(slh(sl))return{R:-1,hit:0};if(long?hi>=tgt:lo<=tgt)return{R:Math.abs(tgt-fp)/risk,hit:1}}
+ return null;
 }
 function backtest(c,step=4,gen){
  const seen=new Set(),rows=[];
@@ -130,5 +142,5 @@ function backtest(c,step=4,gen){
 }
 function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
  s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
-root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim};if(typeof module!=='undefined')module.exports=root.SMC;
+root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim,simX};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
