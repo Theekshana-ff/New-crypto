@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Validated signals</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<header class="top"><div class="row"><button id="menuBtn" aria-label="Menu">&#9776;</button><b>✅ Validated signals</b><div class="clock"><div id="time"></div><div id="date"></div></div></div></header>
+<div id="scrim"></div>
+<nav id="drawer"><h3>Menu</h3><a href="index.html">Home</a><a href="signals.html">Validated signals</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a><a href="patterns.html">Chart patterns</a><a href="journal.html">Trade journal</a><a href="risk.html">Risk calculator</a><a href="links.html">Other websites</a></nav>
+<main>
+ <section class="card" id="ST"><h3>Signal rules that passed real-data tests</h3><p class="msg">Loading...</p></section>
+ <section class="card" id="LV" style="margin-top:12px"><h3>Live signals (closed candles only)</h3>
+  <div class="rin"><label>Coins (comma separated)<input id="coins" value="BTC,ETH,SOL,BNB,XRP,LINK"></label></div>
+  <button id="scan" class="moreBtn">Scan now</button><div id="out"></div></section>
+</main>
+<script src="strat-core.js"></script><script src="signals.js"></script>
+</body></html>

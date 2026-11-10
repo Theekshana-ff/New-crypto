@@ -9,23 +9,18 @@
   ],
   "timeframes": [
     "15m",
-    "1h"
+    "1h",
+    "4h"
   ],
   "methods": [
-    "smc",
-    "fib",
-    "patterns"
+    "strategy"
   ],
   "filters": {
     "news": true,
-    "btc": true,
-    "range": true,
-    "funding": true,
-    "htf": true
+    "btc": false,
+    "range": false,
+    "funding": false,
+    "htf": false
   },
-  "cooldownHours": 6,
-  "skipPatterns": [
-    "1-2-3 Reversal Pattern",
-    "Three Drives Pattern"
-  ]
+  "cooldownHours": 6
 }
