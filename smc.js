@@ -30,7 +30,7 @@ function view(box,Lf){
    const zone=(z,col,txt)=>{
     let e=z.mit&&z.end?z.end:last;
     if(e<=z.i)e=Math.min(last,z.i+1);
-    if(e<=z.i||T(e)<=T(i1=z.i))return;
+    if(e<=z.i||T(e)<=T(z.i))return;
     const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'55',topFillColor2:col+'55',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
     s.setData([{time:T(z.i),value:z.top},{time:T(e),value:z.top}]);
     s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);
@@ -89,7 +89,6 @@ function counts(){
  n('bos',(A.ev||[]).filter(e=>e.k==='BOS').length);
 }
 
-// Isolated data fetch vs UI rendering so UI errors never trigger fake Binance errors
 async function load(sym,first){
  let k;
  try{
@@ -107,13 +106,7 @@ async function load(sym,first){
   S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
   const lp=S.c[S.c.length-1].close,pr=lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,n=S.c.length;
   S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);
-  // Ensure arrays exist even if an older smc-core.js was cached by the browser
-  S.A.liq=S.A.liq||[];
-  S.A.sweeps=S.A.sweeps||[];
-  S.A.idm=S.A.idm||[];
-  S.A.obs=S.A.obs||[];
-  S.A.fvg=S.A.fvg||[];
-  S.A.ev=S.A.ev||[];
+  S.A.liq=S.A.liq||[];S.A.sweeps=S.A.sweeps||[];S.A.idm=S.A.idm||[];S.A.obs=S.A.obs||[];S.A.fvg=S.A.fvg||[];S.A.ev=S.A.ev||[];
   S.T=SMC.setup(S.c,S.A);
 
   for(const v of V){
@@ -134,17 +127,16 @@ async function load(sym,first){
    S.lines.push(series.createPriceLine({price:S.A.range.eq,color:'#6b7c93',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:'EQ 50%'}));
   }
   badge(lp);
-  try{renderB()}catch(e){console.error('renderB:',e)}
-  try{renderD()}catch(e){console.error('renderD:',e)}
-  try{renderR()}catch(e){console.error('renderR:',e)}
-  try{counts()}catch(e){console.error('counts:',e)}
+  renderB();
+  renderD();
+  renderR();
+  counts();
   force();
   loadTD(first);
   if(first)loadHTF();
   if(first&&$('btout'))$('btout').textContent='';
  }catch(uiErr){
   console.error('SMC UI error:',uiErr);
-  if($('err'))$('err').textContent='UI notice: '+uiErr.message;
  }
 }
 
@@ -176,20 +168,50 @@ function renderB(){
  };
 }
 
+// Detailed Sinhala explanation of WHY price goes UP or DOWN
 function renderD(){
- const A=S.A,T=S.T;if(!A)return;
+ const A=S.A,T=S.T;if(!A||!$('D'))return;
  const ev=A.ev||[],e=ev[ev.length-1],n=k=>ev.filter(x=>x.k===k).length;
- let h='<h3>විස්තරය</h3>';
+ let h='<h3>විස්තරය සහ හේතු (Reasons)</h3>';
  if(!e){$('D').innerHTML=h+'<p class="msg">Structure එකක් තවම හඳුනාගත්තේ නෑ.</p>';return}
+
  const up=A.trend>0;
  const sweptIdmCount=(A.idm||[]).filter(x=>x.swept).length;
- h+=`<p>${S.tf} structure එක <b class="${up?'up':'down'}">${up?'Bullish (ඉහළට)':'Bearish (පහළට)'}</b>. අන්තිමට ${pf(e.p)} level එක ${e.d>0?'ඉහළට':'පහළට'} බිඳුණේ <b>${e.k}</b> එකක් ලෙසින්. ${e.k==='CHoCH'?'(CHoCH = trend එක මාරු වීමේ ලකුණ)':'(BOS = දැන් තියෙන trend එක ඉදිරියට යනවා)'}</p>`;
+ const reasons=[];
+
+ // 1. Market Structure Reason (BOS / CHoCH)
+ reasons.push(`<li><b>Market Structure (${e.k}):</b> ${S.tf} චාට් එකේ අන්තිමට ${pf(e.p)} මට්ටම ${e.d>0?'ඉහළට (Bullish)':'පහළට (Bearish)'} කඩාගෙන ගොස් <b>${e.k}</b> එකක් සෑදී ඇත. ${e.k==='CHoCH'?'මෙය Trend එක අලුත් දිශාවකට හැරීමේ ප්‍රබල ලකුණකි.':'මෙය දැනට පවතින Trend එක තවදුරටත් ඉදිරියට යන බව තහවුරු කරයි.'}</li>`);
+
  if(T&&!T.none){
-  h+=`<p>Entry zone එක ${T.src} එකක්: ${pf(T.z.bot)} – ${pf(T.z.top)}. ${T.d>0?'මිල මේ zone එකට පහළට pullback වුණාම buy':'මිල මේ zone එකට ඉහළට pullback වුණාම sell'} සලකන්න. Entry = zone මැද (50%), SL = zone එකට පිටින්.</p><p>TP වලින් ${(T.tps||[]).filter(t=>t.s==='liquidity').length} ක් ඉතුරු liquidity ($$$) levels; අනිත් ඒවා RR අනුව.</p>`;
+  const idmSwept=(A.idm||[]).some(id=>id.d===T.d&&id.swept&&id.i>=T.z.i);
+  // 2. Order Block / FVG Zone Reason
+  reasons.push(`<li><b>${T.src} කලාපය:</b> ${pf(T.z.bot)} – ${pf(T.z.top)} අතර ආයතනික මිලදී ගැනීම්/විකිණීම් (Smart Money Orders) සහිත නැවුම් කලාපයක් පවතී.${T.conf?' ඊට සමගාමීව <b>FVG (Fair Value Gap)</b> එකක්ද පිහිටා ඇති නිසා මෙම කලාපය ඉතා ප්‍රබල වේ.':''}</li>`);
+  // 3. Liquidity & Inducement (IDM) Reason
+  if(T.sweep||idmSwept){
+   reasons.push(`<li><b>Liquidity / IDM Sweep (✓):</b> මිල මෙම කලාපයට පැමිණීමට පෙර Retail ට්‍රේඩර්ස්ලාගේ Stop Loss (Inducement / Liquidity) sweep කර අවසන්ය. එනම් Smart Money විසින් අවශ්‍ය Liquidity එකතු කරගෙන ඇත.</li>`);
+  }else{
+   reasons.push(`<li><b>Liquidity තත්ත්වය:</b> තවමත් පැහැදිලි Liquidity Sweep එකක් සිදුවී නැති නිසා කලාපය තුළදී කැන්ඩල් Confirmation එකක් බලා එන්ටර් වන්න.</li>`);
+  }
+  // 4. Premium / Discount Price Reason
+  if(T.pd){
+   reasons.push(`<li><b>${T.d>0?'Discount (ලාභදායී)':'Premium (ඉහළ)'} කලාපය (✓):</b> Entry කලාපය පිහිටා ඇත්තේ 50% Equilibrium (${pf(A.range.eq)}) මට්ටමට ${T.d>0?'පහළින් (Buy කිරීමට ඉතාම සුදුසු Discount කලාපයේ)':'ඉහළින් (Sell කිරීමට ඉතාම සුදුසු Premium කලාපයේ)'} ය.</li>`);
+  }else{
+   reasons.push(`<li><b>Equilibrium (50%) මට්ටම:</b> මෙම කලාපය 50% මට්ටමට ${T.d>0?'ඉහළින්':'පහළින්'} පිහිටා ඇති බැවින් අවදානම තරමක් වැඩිය.</li>`);
+  }
+  // 5. Higher Timeframe Bias Reason
+  if(S.td&&S.td.dir){
+   reasons.push(`<li><b>Top-Down Bias (${S.td.score}/4):</b> Daily (1D) ට්‍රෙන්ඩ් එක ${S.td.dir===T.d?'මෙම ට්‍රේඩ් එකේ දිශාවටම (Aligned) පවතී.':'මෙම ට්‍රේඩ් එකට විරුද්ධ දිශාවට පවතින නිසා ප්‍රවේශම් වන්න.'}</li>`);
+  }
+
+  h+=`<p><b class="${T.d>0?'up':'down'}">${T.d>0?'🔼 මිල ඉහළ යාමට (LONG / UP) බලපාන හේතු:':'🔽 මිල පහළ යාමට (SHORT / DOWN) බලපාන හේතු:'}</b></p>`;
+  h+=`<ul style="margin:6px 0 10px 18px;padding:0;line-height:1.5">${reasons.join('')}</ul>`;
+  h+=`<p><b>සැලැස්ම:</b> මිල ${pf(T.entry)} (Zone 50%) වෙත පැමිණි විට ${T.d>0?'Buy (Long)':'Sell (Short)'} සලකා බලන්න. Stop Loss එක ${pf(T.sl)} (කලාපයට පිටතින්). ඉලක්ක (TP): ඉදිරියෙන් ඇති Liquidity ($$$) මට්ටම් ${T.tps.map((t,i)=>`TP${i+1}: ${pf(t.p)}`).join(', ')}.</p>`;
  }else{
-  h+='<p>දැනට සියලුම SMC කොන්දේසි (Fresh Zone + IDM/Sweep + Candle Confirmation) සම්පූර්ණ වූ entry එකක් නෑ. චාට් එකේ පෙන්වන OB/FVG කලාපයකට මිල පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</p>';
+  h+=`<p><b class="${up?'up':'down'}">දැනට චාට් එක ${up?'Bullish (ඉහළ යන)':'Bearish (පහළ යන)'} ව්‍යුහයක පවතී:</b></p>`;
+  h+=`<ul style="margin:6px 0 10px 18px;padding:0;line-height:1.5">${reasons.join('')}<li><b>Entry එකක් නොමැති වීමට හේතුව:</b> දැනට සියලුම SMC කොන්දේසි (නැවුම් OB/FVG කලාපයක් + IDM/Liquidity Sweep + Candle Rejection) සම්පූර්ණ වී නැත. මිල නියමිත කලාපයකට පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</li></ul>`;
  }
- h+=`<p class="msg">Chart එකේ: BOS ${n('BOS')}, CHoCH ${n('CHoCH')}, Fresh OB ${(A.obs||[]).filter(o=>!o.mit).length}, Fresh FVG ${(A.fvg||[]).filter(o=>!f.mit).length}, IDM ${(A.idm||[]).length} (Swept ${sweptIdmCount}), Sweep ${(A.sweeps||[]).length}. මේක auto analysis එකක් විතරයි, financial advice නෙවෙයි.</p>`;
+
+ h+=`<p class="msg">Chart Summary: BOS ${n('BOS')} · CHoCH ${n('CHoCH')} · Fresh OB ${(A.obs||[]).filter(o=>!o.mit).length} · Fresh FVG ${(A.fvg||[]).filter(o=>!f.mit).length} · IDM Swept ${sweptIdmCount}/${(A.idm||[]).length} · Sweeps ${(A.sweeps||[]).length}</p>`;
  $('D').innerHTML=h;
  try{ctxCard()}catch(err){console.error('ctxCard error:',err)}
 }
@@ -207,7 +229,7 @@ async function loadTD(f){
   const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));
   S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m});
  }catch(e){S.td=null}
- try{renderTD();renderB()}catch(e){}
+ try{renderTD();renderB();renderD()}catch(e){}
 }
 
 function renderTD(){
