@@ -14,7 +14,7 @@ const tg=o=>{if($('drawer'))$('drawer').classList.toggle('open',o);if($('scrim')
 if($('menuBtn'))$('menuBtn').onclick=()=>tg(1);
 if($('scrim'))$('scrim').onclick=()=>tg(0);
 
-// chart view factory: main chart + individual breakdown charts
+// chart view factory
 const V=[],force=()=>V.forEach(v=>v.force());
 function view(box,Lf){
  const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
@@ -23,14 +23,14 @@ function view(box,Lf){
 
  function render(){
   try{
-   made.forEach(m=>{try{chart.removeSeries(m)}catch(e){}});made.length=0;series.setMarkers([]);$('err').textContent='';
+   made.forEach(m=>{try{chart.removeSeries(m)}catch(e){}});made.length=0;series.setMarkers([]);if($('err'))$('err').textContent='';
    const L=Lf(),A=S.A,c=S.c;if(!A||!c.length)return;
    const last=c.length-1,marks=[],T=i=>c[Math.max(0,Math.min(last,i))].time;
 
    const zone=(z,col,txt)=>{
     let e=z.mit&&z.end?z.end:last;
     if(e<=z.i)e=Math.min(last,z.i+1);
-    if(e<=z.i||T(e)<=T(z.i))return;
+    if(e<=z.i||T(e)<=T(i1=z.i))return;
     const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'55',topFillColor2:col+'55',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
     s.setData([{time:T(z.i),value:z.top},{time:T(e),value:z.top}]);
     s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);
@@ -39,8 +39,7 @@ function view(box,Lf){
 
    const line=(i1,i2,p,col,w,st,txt)=>{
     if(i2<=i1||T(i2)<=T(i1))return;
-    const m=Math.round((i1+i2)/2),pts=[];
-    const seenT=new Set();
+    const m=Math.round((i1+i2)/2),pts=[],seenT=new Set();
     [i1,m,i2].forEach(idx=>{const tm=T(idx);if(!seenT.has(tm)){seenT.add(tm);pts.push({time:tm,value:p})}});
     if(pts.length<2)return;
     const s=chart.addLineSeries({...none,color:col,lineWidth:w,lineStyle:st});
@@ -49,11 +48,13 @@ function view(box,Lf){
     made.push(s);
    };
 
-   if(L.ob)for(const q of[1,-1])A.obs.filter(o=>!o.mit&&o.d===q).slice(-3).forEach(o=>zone(o,q>0?'#2ecc9a':'#ff5d6c',(q>0?'Bull':'Bear')+' OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
-   if(L.fvg)for(const q of[1,-1])A.fvg.filter(o=>!f.mit&&f.d===q).slice(-4).forEach(f=>zone(f,q>0?'#4ea1ff':'#f0b429','FVG'));
-   A.ev.slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(e.from,e.to,e.p,e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?2:1,e.k==='CHoCH'?2:0,e.k+(e.d>0?' ↑':' ↓')));
+   if(L.ob)(A.obs||[]).filter(o=>!o.mit&&o.d===1).slice(-3).forEach(o=>zone(o,'#2ecc9a','Bull OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
+   if(L.ob)(A.obs||[]).filter(o=>!o.mit&&o.d===-1).slice(-3).forEach(o=>zone(o,'#ff5d6c','Bear OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
+   if(L.fvg)(A.fvg||[]).filter(f=>!f.mit&&f.d===1).slice(-4).forEach(f=>zone(f,'#4ea1ff','FVG'));
+   if(L.fvg)(A.fvg||[]).filter(f=>!f.mit&&f.d===-1).slice(-4).forEach(f=>zone(f,'#f0b429','FVG'));
+   (A.ev||[]).slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(e.from,e.to,e.p,e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?2:1,e.k==='CHoCH'?2:0,e.k+(e.d>0?' ↑':' ↓')));
    if(L.htf)(S.htf||[]).forEach(z=>{const i=c.findIndex(x=>x.time>=z.t);if(i>=0)zone({...z,i,mit:0},z.f?(z.d>0?'#4ea1ff':'#f0b429'):(z.d>0?'#2ecc9a':'#ff5d6c'),z.tag)});
-   if(L.idm)A.idm.forEach(m=>line(m.i,m.to,m.p,m.swept?'#ff9f43':'#ffd166',1,2,m.swept?'IDM ✓':'IDM'));
+   if(L.idm)(A.idm||[]).forEach(m=>line(m.i,m.to,m.p,m.swept?'#ff9f43':'#ffd166',1,2,m.swept?'IDM ✓':'IDM'));
    if(L.liq){
     (A.liq||[]).slice(-6).forEach(q=>line(q.from,q.st==='open'?last:q.at,q.p,'#b388ff',1,1,(q.t==='H'?'EQH':'EQL')+' $$$'));
     (A.sweeps||[]).forEach(s=>{
@@ -61,12 +62,11 @@ function view(box,Lf){
      marks.push({time:T(s.at),position:s.t==='H'?'aboveBar':'belowBar',color:'#ff7ad9',shape:'circle',size:0,text:'SWEEP'});
     });
    }
-   // Deduplicate & sort markers by time to prevent LightweightCharts crash
-   const uniqMarks=[];const mMap=new Map();
+   const uniqMarks=[],mMap=new Map();
    marks.sort((x,y)=>x.time-y.time).forEach(m=>mMap.set(m.time+'_'+m.position,m));
    mMap.forEach(v=>uniqMarks.push(v));
    series.setMarkers(uniqMarks.sort((x,y)=>x.time-y.time));
-  }catch(e){console.error(e);$('err').textContent='Draw error: '+e.message}
+  }catch(e){console.error('Chart render error:',e)}
  }
  const v={chart,series,force:render};V.push(v);return v;
 }
@@ -80,24 +80,42 @@ const chart=main.chart,series=main.series;
 });
 
 function counts(){
- const A=S.A,n=(k,v)=>{if($('n_'+k))$('n_'+k).textContent=v+' found'};
- n('ob',A.obs.filter(o=>!o.mit).length);
- n('fvg',A.fvg.filter(o=>!f.mit).length);
+ const A=S.A;if(!A)return;
+ const n=(k,v)=>{if($('n_'+k))$('n_'+k).textContent=v+' found'};
+ n('ob',(A.obs||[]).filter(o=>!o.mit).length);
+ n('fvg',(A.fvg||[]).filter(o=>!f.mit).length);
  n('liq',(A.liq||[]).length+(A.sweeps||[]).length);
- n('ch',A.ev.filter(e=>e.k==='CHoCH').length);
- n('bos',A.ev.filter(e=>e.k==='BOS').length);
+ n('ch',(A.ev||[]).filter(e=>e.k==='CHoCH').length);
+ n('bos',(A.ev||[]).filter(e=>e.k==='BOS').length);
 }
 
-// data loading
+// Isolated data fetch vs UI rendering so UI errors never trigger fake Binance errors
 async function load(sym,first){
+ let k;
  try{
-  const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);if(!r.ok)throw 0;
-  const k=await r.json();if(!k.length)throw 0;
+  const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  k=await r.json();
+  if(!Array.isArray(k)||!k.length)throw new Error('Empty klines');
+ }catch(netErr){
+  $('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`;
+  return;
+ }
+
+ try{
   S.sym=sym;
   S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
   const lp=S.c[S.c.length-1].close,pr=lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,n=S.c.length;
   S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);
+  // Ensure arrays exist even if an older smc-core.js was cached by the browser
+  S.A.liq=S.A.liq||[];
+  S.A.sweeps=S.A.sweeps||[];
+  S.A.idm=S.A.idm||[];
+  S.A.obs=S.A.obs||[];
+  S.A.fvg=S.A.fvg||[];
+  S.A.ev=S.A.ev||[];
   S.T=SMC.setup(S.c,S.A);
+
   for(const v of V){
    const r=v.chart.timeScale().getVisibleLogicalRange();
    v.series.applyOptions({priceFormat:{type:'price',precision:pr,minMove:Math.pow(10,-pr)}});
@@ -107,64 +125,75 @@ async function load(sym,first){
   }
   S.lines.forEach(l=>{try{series.removePriceLine(l)}catch(e){}});S.lines=[];
   const T=S.T;
-  if(T&&!T.none){
+  if(T&&!T.none&&Array.isArray(T.tps)){
    const pl=(p,t,col)=>S.lines.push(series.createPriceLine({price:p,color:col,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:t}));
    pl(T.entry,'ENTRY','#f0b429');pl(T.sl,'SL','#ff5d6c');
    T.tps.forEach((t,i)=>pl(t.p,'TP'+(i+1),'#2ecc9a'));
   }
-  S.lines.push(series.createPriceLine({price:S.A.range.eq,color:'#6b7c93',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:'EQ 50%'}));
-  badge(lp);renderB();renderD();renderR();counts();force();loadTD(first);
+  if(S.A.range&&S.A.range.eq){
+   S.lines.push(series.createPriceLine({price:S.A.range.eq,color:'#6b7c93',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:'EQ 50%'}));
+  }
+  badge(lp);
+  try{renderB()}catch(e){console.error('renderB:',e)}
+  try{renderD()}catch(e){console.error('renderD:',e)}
+  try{renderR()}catch(e){console.error('renderR:',e)}
+  try{counts()}catch(e){console.error('counts:',e)}
+  force();
+  loadTD(first);
   if(first)loadHTF();
   if(first&&$('btout'))$('btout').textContent='';
- }catch(e){
-  $('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`;
+ }catch(uiErr){
+  console.error('SMC UI error:',uiErr);
+  if($('err'))$('err').textContent='UI notice: '+uiErr.message;
  }
 }
 
-function badge(lp){$('badge').innerHTML=`${logo(S.sym,S.img)}<span>${S.sym}</span><small>${pf(lp)}</small>`}
+function badge(lp){if($('badge'))$('badge').innerHTML=`${logo(S.sym,S.img)}<span>${S.sym}</span><small>${pf(lp)}</small>`}
 
 function renderB(){
  const T=S.T,A=S.A;let h='<h3>Trade setup (auto)</h3>';
  if(!T)h+='<p class="msg">Market structure is not clear yet. Try another time frame.</p>';
  else if(T.none){
-  const hasZones=A&&(A.obs.some(o=>!o.mit&&o.d===T.d)||A.fvg.some(f=>!f.mit&&f.d===T.d));
-  h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'BULLISH':'BEARISH'}</span></p><p class="msg">${T.far?'Active zone is too far from current price (> 8 ATR).':hasZones?'Zones found, but waiting for Liquidity Sweep / IDM or Candle Rejection confirmation.':'No clean unmitigated OB / FVG zone right now. Wait for a new break of structure.'}</p>`;
+  const hasZones=A&&((A.obs||[]).some(o=>!o.mit&&o.d===T.d)||(A.fvg||[]).some(f=>!f.mit&&f.d===T.d));
+  h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'BULLISH':'BEARISH'}</span></p><p class="msg">${T.far?'Active zone is too far from current price (> 8 ATR).':hasZones?'Zones found on chart, waiting for Liquidity Sweep / IDM or Candle Rejection confirmation to trigger entry.':'No clean unmitigated OB / FVG zone right now. Wait for a new break of structure.'}</p>`;
  }else{
   const G=SMC.grade(T,S.td),gt=G?`<span class="grade" style="background:${GC[G.g]}">${G.g}</span> <span class="msg">${G.pts}/${G.max}${S.td&&S.td.dir&&S.td.dir!==T.d?' · against daily bias':''}</span>`:'';
   const row=(n,p,col,x)=>`<tr><td style="color:${col}">${n}</td><td>${pf(p)}</td><td>${x}</td></tr>`,ck=(ok,t)=>`<span class="${ok?'up':'down'}">${ok?'✓':'✗'}</span> ${t}`;
-  const idmSwept=A&&A.idm&&A.idm.some(id=>id.d===T.d&&id.swept&&id.i>=T.z.i);
+  const idmSwept=A&&(A.idm||[]).some(id=>id.d===T.d&&id.swept&&id.i>=T.z.i);
+  const hasSweep=!!(T.sweep||idmSwept);
   h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'LONG':'SHORT'}</span> <span class="msg">from ${T.d>0?'Bullish':'Bearish'} ${T.src}${T.conf?' + FVG (strong zone)':''} · ${S.tf}</span> ${gt}</p><table>`+
    row('Entry',T.entry,'#f0b429',T.inside?'🔥 price in zone':pp(T.last,T.entry)+' away')+
-   row('SL',T.sl,'#ff5d6c',pp(T.sl,T.entry)+' (0.65 ATR buffer)')+
-   T.tps.map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+t.rr.toFixed(1)+' ('+t.s+')')).join('')+'</table>'+
-   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(T.sweep,'Liquidity / IDM swept'+(idmSwept?' (IDM ✓)':T.sweepAgo?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50% EQ)':'Premium zone (above 50% EQ)')}</p>`+
+   row('SL',T.sl,'#ff5d6c',pp(T.sl,T.entry))+
+   (T.tps||[]).map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+(t.rr||0).toFixed(1)+' ('+(t.s||'RR')+')')).join('')+'</table>'+
+   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(hasSweep,'Liquidity / IDM swept'+(idmSwept?' (IDM ✓)':T.sweepAgo?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50% EQ)':'Premium zone (above 50% EQ)')}</p>`+
    `<button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`;
  }
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{
   const l=ls.get('smcSaved',[]);
-  l.unshift({sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),t:Math.floor(Date.now()/1000)});
+  l.unshift({sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p),t:Math.floor(Date.now()/1000)});
   ls.set('smcSaved',l.slice(0,20));renderSV();
  };
 }
 
 function renderD(){
- const A=S.A,T=S.T,e=A.ev[A.ev.length-1],n=k=>A.ev.filter(x=>x.k===k).length;
+ const A=S.A,T=S.T;if(!A)return;
+ const ev=A.ev||[],e=ev[ev.length-1],n=k=>ev.filter(x=>x.k===k).length;
  let h='<h3>විස්තරය</h3>';
  if(!e){$('D').innerHTML=h+'<p class="msg">Structure එකක් තවම හඳුනාගත්තේ නෑ.</p>';return}
  const up=A.trend>0;
  const sweptIdmCount=(A.idm||[]).filter(x=>x.swept).length;
  h+=`<p>${S.tf} structure එක <b class="${up?'up':'down'}">${up?'Bullish (ඉහළට)':'Bearish (පහළට)'}</b>. අන්තිමට ${pf(e.p)} level එක ${e.d>0?'ඉහළට':'පහළට'} බිඳුණේ <b>${e.k}</b> එකක් ලෙසින්. ${e.k==='CHoCH'?'(CHoCH = trend එක මාරු වීමේ ලකුණ)':'(BOS = දැන් තියෙන trend එක ඉදිරියට යනවා)'}</p>`;
  if(T&&!T.none){
-  h+=`<p>Entry zone එක ${T.src} එකක්: ${pf(T.z.bot)} – ${pf(T.z.top)}. ${T.d>0?'මිල මේ zone එකට පහළට pullback වුණාම buy':'මිල මේ zone එකට ඉහළට pullback වුණාම sell'} සලකන්න. Entry = zone මැද (50%), SL = zone එකට පිටින් (0.65×ATR buffer සහිතව).</p><p>TP වලින් ${T.tps.filter(t=>t.s==='liquidity').length} ක් ඉතුරු liquidity ($$$) levels; අනිත් ඒවා RR අනුව.</p>`;
+  h+=`<p>Entry zone එක ${T.src} එකක්: ${pf(T.z.bot)} – ${pf(T.z.top)}. ${T.d>0?'මිල මේ zone එකට පහළට pullback වුණාම buy':'මිල මේ zone එකට ඉහළට pullback වුණාම sell'} සලකන්න. Entry = zone මැද (50%), SL = zone එකට පිටින්.</p><p>TP වලින් ${(T.tps||[]).filter(t=>t.s==='liquidity').length} ක් ඉතුරු liquidity ($$$) levels; අනිත් ඒවා RR අනුව.</p>`;
  }else{
-  h+='<p>දැනට සියලුම SMC කොන්දේසි (Unmitigated Zone + IDM/Sweep + Rejection) සම්පූර්ණ වූ zone එකක් නෑ. මිල නියමිත කලාපයට පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</p>';
+  h+='<p>දැනට සියලුම SMC කොන්දේසි (Fresh Zone + IDM/Sweep + Candle Confirmation) සම්පූර්ණ වූ entry එකක් නෑ. චාට් එකේ පෙන්වන OB/FVG කලාපයකට මිල පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</p>';
  }
- h+=`<p class="msg">Chart එකේ: BOS ${n('BOS')}, CHoCH ${n('CHoCH')}, Fresh OB ${A.obs.filter(o=>!o.mit).length}, Fresh FVG ${A.fvg.filter(o=>!f.mit).length}, IDM Swept ${sweptIdmCount}/${(A.idm||[]).length}, Sweep ${(A.sweeps||[]).length}. මේක auto analysis එකක් විතරයි, financial advice නෙවෙයි.</p>`;
+ h+=`<p class="msg">Chart එකේ: BOS ${n('BOS')}, CHoCH ${n('CHoCH')}, Fresh OB ${(A.obs||[]).filter(o=>!o.mit).length}, Fresh FVG ${(A.fvg||[]).filter(o=>!f.mit).length}, IDM ${(A.idm||[]).length} (Swept ${sweptIdmCount}), Sweep ${(A.sweeps||[]).length}. මේක auto analysis එකක් විතරයි, financial advice නෙවෙයි.</p>`;
  $('D').innerHTML=h;
+ try{ctxCard()}catch(err){console.error('ctxCard error:',err)}
 }
 
-// top-down checklist, risk calculator, saved setups, backtest
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){
  const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
@@ -178,7 +207,7 @@ async function loadTD(f){
   const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));
   S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m});
  }catch(e){S.td=null}
- renderTD();renderB();
+ try{renderTD();renderB()}catch(e){}
 }
 
 function renderTD(){
@@ -198,7 +227,7 @@ function renderR(){
  if(!T||T.none||!(a>0)||!(p>0))h='<p class="msg">No setup to size right now.</p>';
  else{
   const risk=a*p/100,q=risk/Math.abs(T.entry-T.sl);
-  h=`<p>Risk: <b>$${risk.toFixed(2)}</b></p><p>Position size: <b>${q>=1?q.toFixed(2):q.toPrecision(3)} ${S.sym}</b> (≈ $${(q*T.entry).toFixed(2)})</p>`+T.tps.map((t,i)=>`<p class="up">TP${i+1}: +$${(q*Math.abs(t.p-T.entry)).toFixed(2)}</p>`).join('')+`<p class="down">SL: -$${risk.toFixed(2)}</p>`;
+  h=`<p>Risk: <b>$${risk.toFixed(2)}</b></p><p>Position size: <b>${q>=1?q.toFixed(2):q.toPrecision(3)} ${S.sym}</b> (≈ $${(q*T.entry).toFixed(2)})</p>`+(T.tps||[]).map((t,i)=>`<p class="up">TP${i+1}: +$${(q*Math.abs(t.p-T.entry)).toFixed(2)}</p>`).join('')+`<p class="down">SL: -$${risk.toFixed(2)}</p>`;
  }
  $('rout').innerHTML=h;
 }
@@ -220,9 +249,8 @@ async function renderSV(){
  document.querySelectorAll('#SV .x').forEach(b=>b.onclick=()=>{const l=ls.get('smcSaved',[]);l.splice(+b.dataset.i,1);ls.set('smcSaved',l);renderSV()});
 }
 
-if(typeof Ctx!=='undefined'&&Ctx.mountBacktest)Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null});
+try{if(typeof Ctx!=='undefined'&&Ctx.mountBacktest)Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null})}catch(e){}
 
-// higher-time-frame zones on the current chart
 const TFS=['1m','5m','15m','1h','4h','1d','1w'];
 async function loadHTF(){
  const h=$('htf').value;S.htf=[];
@@ -230,8 +258,8 @@ async function loadHTF(){
   try{
    const c=await kl(S.sym,h,300),A=SMC.analyze(c),tg=h.toUpperCase();
    for(const d of[1,-1]){
-    A.obs.filter(o=>!o.mit&&o.d===d).slice(-2).forEach(o=>S.htf.push({...o,t:c[o.i].time,tag:tg+' '+(d>0?'Bull':'Bear')+' OB'}));
-    A.fvg.filter(o=>!o.mit&&o.d===d).slice(-2).forEach(o=>S.htf.push({...o,t:c[o.i].time,tag:tg+' FVG',f:1}));
+    (A.obs||[]).filter(o=>!o.mit&&o.d===d).slice(-2).forEach(o=>S.htf.push({...o,t:c[o.i].time,tag:tg+' '+(d>0?'Bull':'Bear')+' OB'}));
+    (A.fvg||[]).filter(o=>!o.mit&&o.d===d).slice(-2).forEach(o=>S.htf.push({...o,t:c[o.i].time,tag:tg+' FVG',f:1}));
    }
   }catch(e){}
  }
@@ -239,7 +267,6 @@ async function loadHTF(){
 }
 $('htf').onchange=loadHTF;
 
-// Multi-Timeframe Coin Scanner (scans 15m, 1h, and 4h to find the best active setup per coin)
 $('SC').innerHTML='<h3>Coin scanner</h3><p class="msg">Scans the 30 most traded coins across 15m, 1h & 4h for top-down score and best active SMC setup.</p><button id="scRun" class="moreBtn">Scan top 30</button><div id="scOut"></div>';
 $('scRun').onclick=async()=>{
  const out=$('scOut');out.textContent='Loading coins...';
@@ -270,7 +297,6 @@ $('scRun').onclick=async()=>{
  }catch(e){out.textContent='Could not scan right now. Try again.'}
 };
 
-// controls
 document.querySelectorAll('#tfbar button').forEach(b=>b.onclick=()=>{S.tf=b.dataset.tf;document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x===b));load(S.sym,1)});
 document.querySelectorAll('#tools [data-l]').forEach(b=>b.onclick=()=>{S.L[b.dataset.l]^=1;b.classList.toggle('on');force()});
 const zoom=f=>{const ts=chart.timeScale(),r=ts.getVisibleLogicalRange();if(r)ts.setVisibleLogicalRange({from:r.to-(r.to-r.from)*f,to:r.to})};
@@ -289,23 +315,28 @@ let t;$('q').oninput=()=>{
  },350);
 };
 $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
-renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
 
-window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p),src:'SMC '+T.src,price:S.c[S.c.length-1].close}:null};
+window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p),src:'SMC '+T.src,price:S.c[S.c.length-1].close}:null};
 
-if(typeof Alerts!=='undefined'){
- Alerts.mount($('ALP'),$('alBtn'));
- Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{
-  const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);
-  if(!T||T.none||!T.inside)return[];
-  const G=SMC.grade(T,null);if(!G||G.pts<4)return[];
-  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${T.tps.map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
- });
+try{
+ if(typeof Alerts!=='undefined'){
+  Alerts.mount($('ALP'),$('alBtn'));
+  Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{
+   const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);
+   if(!T||T.none||!T.inside)return[];
+   const G=SMC.grade(T,null);if(!G||G.pts<4)return[];
+   return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
+  });
+ }
+}catch(e){console.error('Alerts init error:',e)}
+
+function ctxCard(){
+ if(typeof Ctx==='undefined')return;
+ const T=S.T,ok=T&&!T.none;
+ try{if(Ctx.card)Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}catch(e){console.error('Ctx.card:',e)}
+ try{if(Ctx.evidence)Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'SMC',gen:null,setup:ok?{d:T.d,entry:T.entry,sl:T.sl,tps:T.tps}:null})}catch(e){console.error('Ctx.evidence:',e)}
 }
 
-function ctxCard(){if(typeof Ctx==='undefined'||!Ctx.card)return;const T=S.T,ok=T&&!T.none;Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}
-{const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
-document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||typeof Ctx==='undefined')return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:T.tps.map(t=>t.p)})});
+document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||typeof Ctx==='undefined')return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)})});
 
-function evCard(){if(typeof Ctx==='undefined'||!Ctx.evidence)return;const T=S.T;Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'SMC',gen:null,setup:T&&!T.none?{d:T.d,entry:T.entry,sl:T.sl,tps:T.tps}:null})}
-{const _c=ctxCard;ctxCard=function(){_c.apply(this,arguments);evCard()}}
+renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
