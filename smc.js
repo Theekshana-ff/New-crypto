@@ -14,7 +14,7 @@ const tg=o=>{if($('drawer'))$('drawer').classList.toggle('open',o);if($('scrim')
 if($('menuBtn'))$('menuBtn').onclick=()=>tg(1);
 if($('scrim'))$('scrim').onclick=()=>tg(0);
 
-// chart view factory
+// chart view factory: main chart + one separate chart per method
 const V=[],force=()=>V.forEach(v=>v.force());
 function view(box,Lf){
  const chart=LightweightCharts.createChart(box.firstElementChild,{autoSize:true,layout:{background:{color:'#0e1621'},textColor:'#8a9bb0'},grid:{vertLines:{color:'#1a2636'},horzLines:{color:'#1a2636'}},rightPriceScale:{borderColor:'#243447'},timeScale:{borderColor:'#243447',timeVisible:true,rightOffset:8}});
@@ -31,7 +31,7 @@ function view(box,Lf){
     let e=z.mit&&z.end?z.end:last;
     if(e<=z.i)e=Math.min(last,z.i+1);
     if(e<=z.i||T(e)<=T(z.i))return;
-    const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'55',topFillColor2:col+'55',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
+    const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'66',topFillColor2:col+'66',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
     s.setData([{time:T(z.i),value:z.top},{time:T(e),value:z.top}]);
     s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);
     made.push(s);
@@ -48,10 +48,8 @@ function view(box,Lf){
     made.push(s);
    };
 
-   if(L.ob)(A.obs||[]).filter(o=>!o.mit&&o.d===1).slice(-3).forEach(o=>zone(o,'#2ecc9a','Bull OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
-   if(L.ob)(A.obs||[]).filter(o=>!o.mit&&o.d===-1).slice(-3).forEach(o=>zone(o,'#ff5d6c','Bear OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
-   if(L.fvg)(A.fvg||[]).filter(f=>!f.mit&&f.d===1).slice(-4).forEach(f=>zone(f,'#4ea1ff','FVG'));
-   if(L.fvg)(A.fvg||[]).filter(f=>!f.mit&&f.d===-1).slice(-4).forEach(f=>zone(f,'#f0b429','FVG'));
+   if(L.ob)for(const q of[1,-1])(A.obs||[]).filter(o=>!o.mit&&o.d===q).slice(-3).forEach(o=>zone(o,q>0?'#2ecc9a':'#ff5d6c',(q>0?'Bull':'Bear')+' OB'+(o.conf?'+FVG':'')+(o.taps?` (${o.taps}x)`:'')));
+   if(L.fvg)for(const q of[1,-1])(A.fvg||[]).filter(o=>!o.mit&&o.d===q).slice(-4).forEach(o=>zone(o,q>0?'#4ea1ff':'#f0b429','FVG'));
    (A.ev||[]).slice(-14).filter(e=>e.k==='CHoCH'?L.ch:L.bos).forEach(e=>line(e.from,e.to,e.p,e.k==='CHoCH'?'#f0b429':'#8ab4ff',e.k==='CHoCH'?2:1,e.k==='CHoCH'?2:0,e.k+(e.d>0?' ↑':' ↓')));
    if(L.htf)(S.htf||[]).forEach(z=>{const i=c.findIndex(x=>x.time>=z.t);if(i>=0)zone({...z,i,mit:0},z.f?(z.d>0?'#4ea1ff':'#f0b429'):(z.d>0?'#2ecc9a':'#ff5d6c'),z.tag)});
    if(L.idm)(A.idm||[]).forEach(m=>line(m.i,m.to,m.p,m.swept?'#ff9f43':'#ffd166',1,2,m.swept?'IDM ✓':'IDM'));
@@ -62,11 +60,12 @@ function view(box,Lf){
      marks.push({time:T(s.at),position:s.t==='H'?'aboveBar':'belowBar',color:'#ff7ad9',shape:'circle',size:0,text:'SWEEP'});
     });
    }
+   // Deduplicate markers on same timestamp so chart never crashes
    const uniqMarks=[],mMap=new Map();
    marks.sort((x,y)=>x.time-y.time).forEach(m=>mMap.set(m.time+'_'+m.position,m));
    mMap.forEach(v=>uniqMarks.push(v));
    series.setMarkers(uniqMarks.sort((x,y)=>x.time-y.time));
-  }catch(e){console.error('Chart render error:',e)}
+  }catch(e){console.error(e);if($('err'))$('err').textContent='Draw error: '+e.message}
  }
  const v={chart,series,force:render};V.push(v);return v;
 }
@@ -89,14 +88,15 @@ function counts(){
  n('bos',(A.ev||[]).filter(e=>e.k==='BOS').length);
 }
 
+// Data fetch separated from UI rendering
 async function load(sym,first){
  let k;
  try{
   const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);
-  if(!r.ok)throw new Error('HTTP '+r.status);
+  if(!r.ok)throw 0;
   k=await r.json();
-  if(!Array.isArray(k)||!k.length)throw new Error('Empty klines');
- }catch(netErr){
+  if(!k||!k.length)throw 0;
+ }catch(e){
   $('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`;
   return;
  }
@@ -118,10 +118,10 @@ async function load(sym,first){
   }
   S.lines.forEach(l=>{try{series.removePriceLine(l)}catch(e){}});S.lines=[];
   const T=S.T;
-  if(T&&!T.none&&Array.isArray(T.tps)){
+  if(T&&!T.none){
    const pl=(p,t,col)=>S.lines.push(series.createPriceLine({price:p,color:col,lineWidth:1,lineStyle:2,axisLabelVisible:true,title:t}));
    pl(T.entry,'ENTRY','#f0b429');pl(T.sl,'SL','#ff5d6c');
-   T.tps.forEach((t,i)=>pl(t.p,'TP'+(i+1),'#2ecc9a'));
+   (T.tps||[]).forEach((t,i)=>pl(t.p,'TP'+(i+1),'#2ecc9a'));
   }
   if(S.A.range&&S.A.range.eq){
    S.lines.push(series.createPriceLine({price:S.A.range.eq,color:'#6b7c93',lineWidth:1,lineStyle:1,axisLabelVisible:true,title:'EQ 50%'}));
@@ -135,8 +135,8 @@ async function load(sym,first){
   loadTD(first);
   if(first)loadHTF();
   if(first&&$('btout'))$('btout').textContent='';
- }catch(uiErr){
-  console.error('SMC UI error:',uiErr);
+ }catch(err){
+  console.error(err);
  }
 }
 
@@ -147,7 +147,7 @@ function renderB(){
  if(!T)h+='<p class="msg">Market structure is not clear yet. Try another time frame.</p>';
  else if(T.none){
   const hasZones=A&&((A.obs||[]).some(o=>!o.mit&&o.d===T.d)||(A.fvg||[]).some(f=>!f.mit&&f.d===T.d));
-  h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'BULLISH':'BEARISH'}</span></p><p class="msg">${T.far?'Active zone is too far from current price (> 8 ATR).':hasZones?'Zones found on chart, waiting for Liquidity Sweep / IDM or Candle Rejection confirmation to trigger entry.':'No clean unmitigated OB / FVG zone right now. Wait for a new break of structure.'}</p>`;
+  h+=`<p><span class="tag ${T.d>0?'up':'down'}">${T.d>0?'BULLISH':'BEARISH'}</span></p><p class="msg">${T.far?'Active zone is too far from current price (> 8 ATR).':hasZones?'Zones found on chart, waiting for Liquidity Sweep / IDM or Candle Rejection confirmation.':'No clean OB / FVG zone to enter right now. Wait for price to leave a new zone.'}</p>`;
  }else{
   const G=SMC.grade(T,S.td),gt=G?`<span class="grade" style="background:${GC[G.g]}">${G.g}</span> <span class="msg">${G.pts}/${G.max}${S.td&&S.td.dir&&S.td.dir!==T.d?' · against daily bias':''}</span>`:'';
   const row=(n,p,col,x)=>`<tr><td style="color:${col}">${n}</td><td>${pf(p)}</td><td>${x}</td></tr>`,ck=(ok,t)=>`<span class="${ok?'up':'down'}">${ok?'✓':'✗'}</span> ${t}`;
@@ -157,8 +157,7 @@ function renderB(){
    row('Entry',T.entry,'#f0b429',T.inside?'🔥 price in zone':pp(T.last,T.entry)+' away')+
    row('SL',T.sl,'#ff5d6c',pp(T.sl,T.entry))+
    (T.tps||[]).map((t,i)=>row('TP'+(i+1),t.p,'#2ecc9a','RR '+(t.rr||0).toFixed(1)+' ('+(t.s||'RR')+')')).join('')+'</table>'+
-   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(hasSweep,'Liquidity / IDM swept'+(idmSwept?' (IDM ✓)':T.sweepAgo?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50% EQ)':'Premium zone (above 50% EQ)')}</p>`+
-   `<button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`;
+   `<p class="chk">${ck(T.conf,'OB + FVG confluence')}<br>${ck(hasSweep,'Liquidity / IDM swept'+(idmSwept?' (IDM ✓)':T.sweepAgo?` (${T.sweepAgo} bars ago)`:''))}<br>${ck(T.pd,T.d>0?'Discount zone (below 50% EQ)':'Premium zone (above 50% EQ)')}</p><button id="saveBtn" class="moreBtn">Save setup</button> <button id="jBtn" class="moreBtn">📒 Take trade</button> <button class="moreBtn" data-alert>🔔 Alert at entry</button>`;
  }
  $('B').innerHTML=h;
  if($('saveBtn'))$('saveBtn').onclick=()=>{
@@ -169,47 +168,51 @@ function renderB(){
 }
 
 function renderD(){
- const A=S.A,T=S.T;if(!A||!$('D'))return;
- const ev=A.ev||[],e=ev[ev.length-1],n=k=>ev.filter(x=>x.k===k).length;
+ const box=$('D');if(!box)return;
+ const A=S.A,T=S.T;
  let h='<h3>විස්තරය සහ හේතු (Reasons)</h3>';
- if(!e){$('D').innerHTML=h+'<p class="msg">Structure එකක් තවම හඳුනාගත්තේ නෑ.</p>';return}
-
+ if(!A||!(A.ev||[]).length){
+  box.innerHTML=h+'<p class="msg">Structure එකක් තවම හඳුනාගත්තේ නෑ.</p>';
+  return;
+ }
+ const ev=A.ev||[],e=ev[ev.length-1],n=k=>ev.filter(x=>x.k===k).length;
  const up=A.trend>0;
  const sweptIdmCount=(A.idm||[]).filter(x=>x.swept).length;
  const reasons=[];
 
- reasons.push(`<li><b>Market Structure (${e.k}):</b> ${S.tf} චාට් එකේ අන්තිමට ${pf(e.p)} මට්ටම ${e.d>0?'ඉහළට (Bullish)':'පහළට (Bearish)'} කඩාගෙන ගොස් <b>${e.k}</b> එකක් සෑදී ඇත. ${e.k==='CHoCH'?'මෙය Trend එක අලුත් දිශාවකට හැරීමේ ප්‍රබල ලකුණකි.':'මෙය දැනට පවතින Trend එක තවදුරටත් ඉදිරියට යන බව තහවුරු කරයි.'}</li>`);
+ reasons.push(`<li><b>Market Structure (${e.k}):</b> ${S.tf} චාට් එකේ අන්තිමට ${pf(e.p)} level එක ${e.d>0?'ඉහළට (Bullish)':'පහළට (Bearish)'} බිඳුණේ <b>${e.k}</b> එකක් ලෙසින්. ${e.k==='CHoCH'?'(CHoCH = trend එක මාරු වීමේ ලකුණකි)':'(BOS = දැන් තියෙන trend එක ඉදිරියට යන බව තහවුරු කරයි)'}</li>`);
 
- if(T&&!T.none){
+ if(T&&!T.none&&T.z){
   const idmSwept=(A.idm||[]).some(id=>id.d===T.d&&id.swept&&id.i>=T.z.i);
-  reasons.push(`<li><b>${T.src} කලාපය:</b> ${pf(T.z.bot)} – ${pf(T.z.top)} අතර ආයතනික මිලදී ගැනීම්/විකිණීම් (Smart Money Orders) සහිත නැවුම් කලාපයක් පවතී.${T.conf?' ඊට සමගාමීව <b>FVG (Fair Value Gap)</b> එකක්ද පිහිටා ඇති නිසා මෙම කලාපය ඉතා ප්‍රබල වේ.':''}</li>`);
+  reasons.push(`<li><b>${T.src} කලාපය:</b> ${pf(T.z.bot)} – ${pf(T.z.top)} අතර Smart Money Orders සහිත නැවුම් කලාපයක් පවතී.${T.conf?' ඊට සමගාමීව <b>FVG Confluence</b> එකක්ද පිහිටා ඇති නිසා මෙම කලාපය ඉතා ප්‍රබල වේ.':''}</li>`);
   if(T.sweep||idmSwept){
-   reasons.push(`<li><b>Liquidity / IDM Sweep (✓):</b> මිල මෙම කලාපයට පැමිණීමට පෙර Retail ට්‍රේඩර්ස්ලාගේ Stop Loss (Inducement / Liquidity) sweep කර අවසන්ය. එනම් Smart Money විසින් අවශ්‍ය Liquidity එකතු කරගෙන ඇත.</li>`);
+   reasons.push(`<li><b>Liquidity / IDM Sweep (✓):</b> මිල මෙම කලාපයට පැමිණීමට පෙර Inducement / Liquidity sweep කර අවසන්ය.</li>`);
   }else{
-   reasons.push(`<li><b>Liquidity තත්ත්වය:</b> තවමත් පැහැදිලි Liquidity Sweep එකක් සිදුවී නැති නිසා කලාපය තුළදී කැන්ඩල් Confirmation එකක් බලා එන්ටර් වන්න.</li>`);
+   reasons.push(`<li><b>Liquidity තත්ත්වය:</b> තවමත් Liquidity Sweep එකක් සිදුවී නැති නිසා කලාපය තුළදී Candle Rejection එකක් බලා එන්ටර් වන්න.</li>`);
   }
   if(T.pd){
-   reasons.push(`<li><b>${T.d>0?'Discount (ලාභදායී)':'Premium (ඉහළ)'} කලාපය (✓):</b> Entry කලාපය පිහිටා ඇත්තේ 50% Equilibrium (${pf(A.range.eq)}) මට්ටමට ${T.d>0?'පහළින් (Buy කිරීමට ඉතාම සුදුසු Discount කලාපයේ)':'ඉහළින් (Sell කිරීමට ඉතාම සුදුසු Premium කලාපයේ)'} ය.</li>`);
+   reasons.push(`<li><b>${T.d>0?'Discount (ලාභදායී)':'Premium (ඉහළ)'} කලාපය (✓):</b> කලාපය 50% Equilibrium (${pf(A.range.eq)}) මට්ටමට ${T.d>0?'පහළින් (Buy කිරීමට සුදුසු Discount කලාපයේ)':'ඉහළින් (Sell කිරීමට සුදුසු Premium කලාපයේ)'} පිහිටා ඇත.</li>`);
   }else{
-   reasons.push(`<li><b>Equilibrium (50%) මට්ටම:</b> මෙම කලාපය 50% මට්ටමට ${T.d>0?'ඉහළින්':'පහළින්'} පිහිටා ඇති බැවින් අවදානම තරමක් වැඩිය.</li>`);
+   reasons.push(`<li><b>Equilibrium (50%) මට්ටම:</b> කලාපය 50% මට්ටමට ${T.d>0?'ඉහළින්':'පහළින්'} පිහිටා ඇත.</li>`);
   }
   if(S.td&&S.td.dir){
-   reasons.push(`<li><b>Top-Down Bias (${S.td.score}/4):</b> Daily (1D) ට්‍රෙන්ඩ් එක ${S.td.dir===T.d?'මෙම ට්‍රේඩ් එකේ දිශාවටම (Aligned) පවතී.':'මෙම ට්‍රේඩ් එකට විරුද්ධ දිශාවට පවතින නිසා ප්‍රවේශම් වන්න.'}</li>`);
+   reasons.push(`<li><b>Top-Down Bias (${S.td.score}/4):</b> Daily (1D) ට්‍රෙන්ඩ් එක ${S.td.dir===T.d?'මෙම ට්‍රේඩ් එකේ දිශාවටම (Aligned) පවතී.':'මෙම ට්‍රේඩ් එකට විරුද්ධ දිශාවට පවතී.'}</li>`);
   }
 
   h+=`<p><b class="${T.d>0?'up':'down'}">${T.d>0?'🔼 මිල ඉහළ යාමට (LONG / UP) බලපාන හේතු:':'🔽 මිල පහළ යාමට (SHORT / DOWN) බලපාන හේතු:'}</b></p>`;
   h+=`<ul style="margin:6px 0 10px 18px;padding:0;line-height:1.5">${reasons.join('')}</ul>`;
-  h+=`<p><b>සැලැස්ම:</b> මිල ${pf(T.entry)} වෙත පැමිණි විට ${T.d>0?'Buy (Long)':'Sell (Short)'} සලකා බලන්න. Stop Loss එක ${pf(T.sl)}. ඉලක්ක (TP): ${T.tps.map((t,i)=>`TP${i+1}: ${pf(t.p)}`).join(', ')}.</p>`;
+  h+=`<p><b>සැලැස්ම:</b> Entry = ${pf(T.entry)} (zone මැද), SL = ${pf(T.sl)} (zone එකට පිටින්). TP වලින් ${(T.tps||[]).filter(t=>t.s==='liquidity').length} ක් ඉතුරු liquidity ($$$) levels; අනිත් ඒවා RR අනුව.</p>`;
  }else{
   h+=`<p><b class="${up?'up':'down'}">දැනට චාට් එක ${up?'Bullish (ඉහළ යන)':'Bearish (පහළ යන)'} ව්‍යුහයක පවතී:</b></p>`;
-  h+=`<ul style="margin:6px 0 10px 18px;padding:0;line-height:1.5">${reasons.join('')}<li><b>Entry එකක් නොමැති වීමට හේතුව:</b> දැනට සියලුම SMC කොන්දේසි (නැවුම් OB/FVG කලාපයක් + IDM/Liquidity Sweep + Candle Rejection) සම්පූර්ණ වී නැත. මිල නියමිත කලාපයකට පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</li></ul>`;
+  h+=`<ul style="margin:6px 0 10px 18px;padding:0;line-height:1.5">${reasons.join('')}<li><b>Entry එකක් නොමැති වීමට හේතුව:</b> දැනට සියලුම SMC කොන්දේසි (Fresh OB/FVG + IDM/Liquidity Sweep + Candle Confirmation) සම්පූර්ණ වී නැත. මිල නියමිත කලාපයකට පැමිණ තහවුරු වන තෙක් රැඳී සිටින්න.</li></ul>`;
  }
 
- h+=`<p class="msg">Chart Summary: BOS ${n('BOS')} · CHoCH ${n('CHoCH')} · Fresh OB ${(A.obs||[]).filter(o=>!o.mit).length} · Fresh FVG ${(A.fvg||[]).filter(o=>!o.mit).length} · IDM Swept ${sweptIdmCount}/${(A.idm||[]).length} · Sweeps ${(A.sweeps||[]).length}</p>`;
- $('D').innerHTML=h;
- try{ctxCard()}catch(err){console.error('ctxCard error:',err)}
+ h+=`<p class="msg">Chart එකේ: BOS ${n('BOS')}, CHoCH ${n('CHoCH')}, OB ${(A.obs||[]).filter(o=>!o.mit).length}, FVG ${(A.fvg||[]).filter(o=>!o.mit).length}, IDM Swept ${sweptIdmCount}/${(A.idm||[]).length}, Sweep ${(A.sweeps||[]).length}. මේක auto analysis එකක් විතරයි, financial advice නෙවෙයි.</p>`;
+ box.innerHTML=h;
+ try{ctxCard()}catch(err){console.error(err)}
 }
 
+// top-down checklist, risk calculator, saved setups, backtest
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){
  const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
@@ -219,11 +222,8 @@ async function kl(sym,tf,lim,start){
 async function loadTD(f){
  if(!f&&Date.now()-S.tdT<60000&&S.tdSym===S.sym)return;
  S.tdT=Date.now();S.tdSym=S.sym;
- try{
-  const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));
-  S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m});
- }catch(e){S.td=null}
- try{renderTD();renderB();renderD()}catch(e){}
+ try{const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m})}catch(e){S.td=null}
+ renderTD();renderB();renderD();
 }
 
 function renderTD(){
@@ -265,8 +265,9 @@ async function renderSV(){
  document.querySelectorAll('#SV .x').forEach(b=>b.onclick=()=>{const l=ls.get('smcSaved',[]);l.splice(+b.dataset.i,1);ls.set('smcSaved',l);renderSV()});
 }
 
-try{if(typeof Ctx!=='undefined'&&Ctx.mountBacktest)Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null})}catch(e){}
+if(typeof Ctx!=='undefined'&&Ctx.mountBacktest)Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null});
 
+// higher-time-frame zones on the current chart
 const TFS=['1m','5m','15m','1h','4h','1d','1w'];
 async function loadHTF(){
  const h=$('htf').value;S.htf=[];
@@ -283,7 +284,8 @@ async function loadHTF(){
 }
 $('htf').onchange=loadHTF;
 
-$('SC').innerHTML='<h3>Coin scanner</h3><p class="msg">Scans the 30 most traded coins across 15m, 1h & 4h for top-down score and best active SMC setup.</p><button id="scRun" class="moreBtn">Scan top 30</button><div id="scOut"></div>';
+// coin scanner (top 30 coins by volume, scans 15m, 1h & 4h)
+$('SC').innerHTML='<h3>Coin scanner</h3><p class="msg">Scans the 30 most traded coins across 15m, 1h & 4h: top-down score and best setup grade.</p><button id="scRun" class="moreBtn">Scan top 30</button><div id="scOut"></div>';
 $('scRun').onclick=async()=>{
  const out=$('scOut');out.textContent='Loading coins...';
  try{
@@ -299,12 +301,12 @@ $('scRun').onclick=async()=>{
      const A=SMC.analyze(cData,tfName==='15m'?5:4),T=SMC.setup(cData,A),G=SMC.grade(T,td);
      if(G&&(!bestG||G.pts>bestG.pts||(G.pts===bestG.pts&&T.inside))){bestT=T;bestG=G;bestTf=tfName}
     }
-    rows.push({sym,td,T:bestT,g:bestG,tf:bestTf,pts:bestG?bestG.pts+(bestT&&bestT.inside?2:0):td.score*0.5});
+    rows.push({sym,td,T:bestT,g:bestG,tf:bestTf,pts:bestG?bestG.pts+(bestT&&bestT.inside?2:0):-1});
    }catch(e){}
    out.textContent=`Scanning ${++k}/${all.length}...`;
   }));
   rows.sort((a,b)=>b.pts-a.pts);
-  out.innerHTML='<table>'+rows.slice(0,15).map(r=>`<tr class="sc" data-s="${r.sym}" data-tf="${r.tf}"><td>${logo(r.sym)} <b>${r.sym}</b> <small class="msg">${r.tf}</small></td><td><span class="${r.td.dir>0?'up':r.td.dir<0?'down':''}">${r.td.dir>0?'Bull':r.td.dir<0?'Bear':'-'}</span> ${r.td.score}/4</td><td>${r.g?`<span class="grade" style="background:${GC[r.g.g]}">${r.g.g}</span>`:'<span class="msg">no zone</span>'}</td><td>${r.T&&!r.T.none?(r.T.inside?'🔥 in zone':pp(r.T.last,r.T.entry)+' away'):''}</td></tr>`).join('')+'</table><p class="msg">Tap a coin to open its chart.</p>';
+  out.innerHTML='<table>'+rows.slice(0,15).map(r=>`<tr class="sc" data-s="${r.sym}" data-tf="${r.tf}"><td>${logo(r.sym)} <b>${r.sym}</b> <small class="msg">${r.tf}</small></td><td><span class="${r.td.dir>0?'up':r.td.dir<0?'down':''}">${r.td.dir>0?'Bull':r.td.dir<0?'Bear':'-'}</span> ${r.td.score}/4</td><td>${r.g?`<span class="grade" style="background:${GC[r.g.g]}">${r.g.g}</span>`:'<span class="msg">no zone</span>'}</td><td>${r.T&&!r.T.none?(r.T.inside?'🔥 in zone':pp(r.T.last,r.T.entry)+' to entry'):''}</td></tr>`).join('')+'</table><p class="msg">Tap a coin to open it.</p>';
   document.querySelectorAll('.sc').forEach(r=>r.onclick=()=>{
    $('q').value=r.dataset.s;S.img='';
    if(r.dataset.tf){S.tf=r.dataset.tf;document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x.dataset.tf===S.tf))}
@@ -313,6 +315,7 @@ $('scRun').onclick=async()=>{
  }catch(e){out.textContent='Could not scan right now. Try again.'}
 };
 
+// controls
 document.querySelectorAll('#tfbar button').forEach(b=>b.onclick=()=>{S.tf=b.dataset.tf;document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x===b));load(S.sym,1)});
 document.querySelectorAll('#tools [data-l]').forEach(b=>b.onclick=()=>{S.L[b.dataset.l]^=1;b.classList.toggle('on');force()});
 const zoom=f=>{const ts=chart.timeScale(),r=ts.getVisibleLogicalRange();if(r)ts.setVisibleLogicalRange({from:r.to-(r.to-r.from)*f,to:r.to})};
@@ -334,23 +337,21 @@ $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
 
 window.getSetup=()=>{const T=S.T;return T&&!T.none?{sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p),src:'SMC '+T.src,price:S.c[S.c.length-1].close}:null};
 
-try{
- if(typeof Alerts!=='undefined'){
-  Alerts.mount($('ALP'),$('alBtn'));
-  Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{
-   const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);
-   if(!T||T.none||!T.inside)return[];
-   const G=SMC.grade(T,null);if(!G||G.pts<4)return[];
-   return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
-  });
- }
-}catch(e){console.error('Alerts init error:',e)}
+if(typeof Alerts!=='undefined'){
+ Alerts.mount($('ALP'),$('alBtn'));
+ Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{
+  const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);
+  if(!T||T.none||!T.inside)return[];
+  const G=SMC.grade(T,null);if(!G||G.pts<4)return[];
+  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
+ });
+}
 
 function ctxCard(){
  if(typeof Ctx==='undefined')return;
  const T=S.T,ok=T&&!T.none;
- try{if(Ctx.card)Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}catch(e){console.error('Ctx.card:',e)}
- try{if(Ctx.evidence)Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'SMC',gen:null,setup:ok?{d:T.d,entry:T.entry,sl:T.sl,tps:T.tps}:null})}catch(e){console.error('Ctx.evidence:',e)}
+ try{if(Ctx.card)Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:ok?T.d:(S.A?S.A.trend:0),G:ok?SMC.grade(T,S.td):null})}catch(e){}
+ try{if(Ctx.evidence)Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'SMC',gen:null,setup:ok?{d:T.d,entry:T.entry,sl:T.sl,tps:T.tps}:null})}catch(e){}
 }
 
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||typeof Ctx==='undefined')return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)})});
