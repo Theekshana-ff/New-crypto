@@ -73,7 +73,8 @@ function analyze(c, L=4){
 
  for(let k=obs.length-1;k>=0;k--){const o=obs[k];if(!(fvg.some(f=>f.d===o.d&&f.i>o.i&&f.i<=o.to)||c.slice(o.i+1,o.to+1).some(x=>(o.d===1?x.close-x.open:x.open-x.close)>=1.2*atr))||o.top-o.bot>3*atr)obs.splice(k,1)}
 
- for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===f.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
+ // OB + FVG confluence (Fixed f.d === o.d)
+ for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===o.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
 
  const p2=[];for(let i=2;i<n-2;i++){if([-2,-1,1,2].every(k=>c[i].high>c[i+k].high))p2.push({t:'H',i,p:c[i].high});if([-2,-1,1,2].every(k=>c[i].low<c[i+k].low))p2.push({t:'L',i,p:c[i].low})}
  const idm=[];
@@ -199,7 +200,7 @@ function backtest(c,step=4,gen){
 }
 
 function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
- s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
+ s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.nM/s.nM:0;return s}
 
 root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim,simX};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
