@@ -22,9 +22,9 @@
     "4h"
   ],
   "methods": [
-    "SMC",
-    "FIB",
-    "PAT",
+    "smc",
+    "fib",
+    "patterns",
     "strategy"
   ],
   "filters": {
