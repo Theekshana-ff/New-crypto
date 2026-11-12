@@ -1,3 +1,4 @@
+// File: smc.js
 const $=id=>document.getElementById(id);
 const cdn=s=>`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${s.toLowerCase()}.png`;
 function fb(el,s){if(!el.dataset.f){el.dataset.f=1;el.src=cdn(s)}else el.outerHTML=`<i class="lg">${s[0]}</i>`}
@@ -6,7 +7,7 @@ const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==
 const GC={'A+':'#f0b429',A:'#2ecc9a',B:'#4ea1ff',C:'#8a9bb0'};
 const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
 const pp=(p,r)=>((p-r)/r*100).toFixed(2)+'%';
-let S={sym:'BTC',tf:'1h',img:'',c:[],A:null,T:null,lines:[],L:{struct:1,ob:1,fvg:1,liq:1,idm:1},td:null,tdT:0,tdSym:''},sig='';
+let S={sym:'BTC',tf:'1h',img:'',c:[],A:null,T:null,lines:[],L:{struct:1,ob:1,fvg:1,liq:1,idm:1},td:null,tdT:0,tdSym:'',htf:[]},sig='',reqId=0;
 
 // clock + menu
 setInterval(function t(){const d=new Date();if($('time'))$('time').textContent=d.toLocaleTimeString();if($('date'))$('date').textContent=d.toLocaleDateString('en',{weekday:'short',year:'numeric',month:'short',day:'numeric'});return t}(),1000);
@@ -31,9 +32,9 @@ function view(box,Lf){
     let e=z.mit&&z.end?z.end:last;
     if(e<=z.i)e=Math.min(last,z.i+1);
     if(e<=z.i||T(e)<=T(z.i))return;
-    const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'66',topFillColor2:col+'66',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
+    const s=chart.addBaselineSeries({...none,baseValue:{type:'price',price:z.bot},topLineColor:col,topFillColor1:col+'55',topFillColor2:col+'55',bottomLineColor:'rgba(0,0,0,0)',bottomFillColor1:'rgba(0,0,0,0)',bottomFillColor2:'rgba(0,0,0,0)',lineWidth:1});
     s.setData([{time:T(z.i),value:z.top},{time:T(e),value:z.top}]);
-    s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);
+    if(txt)s.setMarkers([{time:T(z.i),position:'inBar',shape:'circle',size:0,color:col,text:txt}]);
     made.push(s);
    };
 
@@ -60,7 +61,6 @@ function view(box,Lf){
      marks.push({time:T(s.at),position:s.t==='H'?'aboveBar':'belowBar',color:'#ff7ad9',shape:'circle',size:0,text:'SWEEP'});
     });
    }
-   // Deduplicate markers on same timestamp so chart never crashes
    const uniqMarks=[],mMap=new Map();
    marks.sort((x,y)=>x.time-y.time).forEach(m=>mMap.set(m.time+'_'+m.position,m));
    mMap.forEach(v=>uniqMarks.push(v));
@@ -88,22 +88,32 @@ function counts(){
  n('bos',(A.ev||[]).filter(e=>e.k==='BOS').length);
 }
 
-// Data fetch separated from UI rendering
+// Fetch CLOSED candles only (prevents live-candle repainting)
+const KL='https://data-api.binance.vision/api/v3/klines';
+async function kl(sym,tf,lim,start){
+ const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
+ const now=Date.now(),raw=await r.json();
+ const closed=raw.filter(x=>x[6]<=now);
+ const use=closed.length>=30?closed:raw.slice(0,-1);
+ return use.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
+}
+
+// Data fetch separated from UI rendering with request-ID race protection
 async function load(sym,first){
- let k;
+ const myId=++reqId;
+ let cData;
  try{
-  const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${S.tf}&limit=500`);
-  if(!r.ok)throw 0;
-  k=await r.json();
-  if(!k||!k.length)throw 0;
+  cData=await kl(sym,S.tf,500);
+  if(!cData||!cData.length)throw 0;
  }catch(e){
-  $('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`;
+  if(myId===reqId)$('B').innerHTML=`<h3>Trade setup</h3><p class="msg">${sym} is not available on Binance (USDT). Try another coin.</p>`;
   return;
  }
+ if(myId!==reqId)return;
 
  try{
   S.sym=sym;
-  S.c=k.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
+  S.c=cData;
   const lp=S.c[S.c.length-1].close,pr=lp>=100?2:lp>=1?4:lp>=.1?5:lp>=.01?6:8,n=S.c.length;
   S.A=SMC.analyze(S.c,/m$/.test(S.tf)?5:4);
   S.A.liq=S.A.liq||[];S.A.sweeps=S.A.sweeps||[];S.A.idm=S.A.idm||[];S.A.obs=S.A.obs||[];S.A.fvg=S.A.fvg||[];S.A.ev=S.A.ev||[];
@@ -131,9 +141,9 @@ async function load(sym,first){
   renderD();
   renderR();
   counts();
-  force();
+  if(first)await loadHTF();
+  else force();
   loadTD(first);
-  if(first)loadHTF();
   if(first&&$('btout'))$('btout').textContent='';
  }catch(err){
   console.error(err);
@@ -212,17 +222,15 @@ function renderD(){
  try{ctxCard()}catch(err){console.error(err)}
 }
 
-// top-down checklist, risk calculator, saved setups, backtest
-const KL='https://data-api.binance.vision/api/v3/klines';
-async function kl(sym,tf,lim,start){
- const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
- return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
-}
-
 async function loadTD(f){
  if(!f&&Date.now()-S.tdT<60000&&S.tdSym===S.sym)return;
  S.tdT=Date.now();S.tdSym=S.sym;
- try{const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(S.sym,t,300)));S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m})}catch(e){S.td=null}
+ const targetSym=S.sym;
+ try{
+  const[d,h4,h1,m]=await Promise.all(['1d','4h','1h','15m'].map(t=>kl(targetSym,t,300)));
+  if(targetSym!==S.sym)return;
+  S.td=SMC.topDown({'1d':d,'4h':h4,'1h':h1,'15m':m});
+ }catch(e){if(targetSym===S.sym)S.td=null}
  renderTD();renderB();renderD();
 }
 
@@ -342,7 +350,8 @@ if(typeof Alerts!=='undefined'){
  Alerts.init('SMC',()=>S.sym,()=>S.tf,async(sym,tf)=>{
   const c=await kl(sym,tf,500),A=SMC.analyze(c,/m$/.test(tf)?5:4),T=SMC.setup(c,A);
   if(!T||T.none||!T.inside)return[];
-  const G=SMC.grade(T,null);if(!G||G.pts<4)return[];
+  const td=sym===S.sym?S.td:null,G=SMC.grade(T,td);
+  if(!G||G.pts<4)return[];
   return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
  });
 }
