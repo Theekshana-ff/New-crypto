@@ -144,7 +144,7 @@ async function load(sym,first){
   if(first)await loadHTF();
   else force();
   loadTD(first);
-  if(first&&$('btout'))$('btout'].textContent='';
+  if(first&&$('btout'))$('btout').textContent='';
  }catch(err){
   console.error(err);
  }
@@ -352,7 +352,7 @@ if(typeof Alerts!=='undefined'){
   if(!T||T.none||!T.inside)return[];
   const td=sym===S.sym?S.td:null,G=SMC.grade(T,td);
   if(!G||G.pts<4)return[];
-  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
+  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'-'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
  });
 }
 
@@ -368,7 +368,7 @@ document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||t
 renderSV();
 setInterval(renderSV,60000);
 
-// URL එකෙන් ?sym=XYZ කියවාගෙන අදාළ coin එක load කිරීම (පෙරනිමියෙන් BTC)
+// URL එකෙන් ?sym=XYZ කියවාගෙන අදාළ coin එක load කිරීම
 const urlParams = new URLSearchParams(window.location.search);
 const initSym = urlParams.get('sym') ? urlParams.get('sym').toUpperCase() : 'BTC';
 load(initSym, 1);
