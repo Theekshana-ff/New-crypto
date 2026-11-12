@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI Futures Trading Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="row">
+    <button id="menuBtn" aria-label="Menu">&#9776;</button>
+    <b>🤖 AI Futures Trading Agent (MEXC)</b>
+    <div class="clock"><div id="time"></div><div id="date"></div></div>
+  </div>
+</header>
+<div id="scrim"></div>
+<nav id="drawer">
+  <h3>Menu</h3>
+  <a href="index.html">Home</a>
+  <a href="signals.html">Validated signals</a>
+  <a href="smc.html">SMC</a>
+  <a href="fibonacci.html">Fibonacci</a>
+  <a href="patterns.html">Chart patterns</a>
+  <a href="agent.html">🤖 AI Agent</a>
+  <a href="journal.html">Trade journal</a>
+  <a href="risk.html">Risk calculator</a>
+  <a href="links.html">Other websites</a>
+</nav>
+
+<main>
+  <!-- MEXC Account & Agent Controls -->
+  <section class="card" style="margin-bottom:12px">
+    <h3>⚙️ MEXC Futures AI Agent Control Panel</h3>
+    <div class="rin" style="margin-top:8px">
+      <label>Agent Password (AGENT_SECRET)
+        <input id="sec" type="password" placeholder="Enter secret key">
+      </label>
+      <label>Margin per Trade (USDT)
+        <input id="margin" type="number" min="2" value="10">
+      </label>
+      <label>Leverage (x)
+        <input id="lev" type="number" min="1" max="50" value="10">
+      </label>
+      <label>Scan Timeframe
+        <select id="tf" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">
+          <option value="15m" selected>15m (Scalp / Intraday)</option>
+          <option value="1h">1h (Swing)</option>
+          <option value="4h">4h (Trend)</option>
+        </select>
+      </label>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
+      <button id="runOnceBtn" class="moreBtn" style="background:#2ecc9a;color:#0e1621;font-weight:700;margin:0">
+        🚀 Scan Top 30 &amp; Execute AI Trade Now
+      </button>
+      <button id="autoToggleBtn" class="moreBtn" style="background:#f0b429;color:#0e1621;font-weight:700;margin:0">
+        🔄 Start 24/7 Auto-Pilot: OFF
+      </button>
+      <button id="refreshBtn" class="moreBtn" style="margin:0">↻ Refresh Live PnL</button>
+    </div>
+    <p id="statusMsg" class="msg" style="margin-top:8px">Enter your Agent Password and click Refresh or Execute.</p>
+  </section>
+
+  <!-- MEXC Futures Balance Summary -->
+  <section class="card" id="BAL" style="margin-bottom:12px">
+    <h3>💼 MEXC Futures Account</h3>
+    <p class="msg">Connect with your Agent Password to view live USDT balance &amp; active trades.</p>
+  </section>
+
+  <!-- Live Open Positions & Profit/Loss Tracker -->
+  <section class="card" id="POS" style="margin-bottom:12px">
+    <h3>📊 Live MEXC Futures Positions (Profit / Loss)</h3>
+    <p class="msg">No active positions loaded yet.</p>
+  </section>
+
+  <!-- AI Agent Execution History Log -->
+  <section class="card" id="LOG">
+    <h3>📜 AI Agent Trade Log (Executed History)</h3>
+    <div id="logList"><p class="msg">No trades executed by AI Agent in this session yet.</p></div>
+  </section>
+</main>
+
+<script src="agent.js"></script>
+</body>
+</html>
