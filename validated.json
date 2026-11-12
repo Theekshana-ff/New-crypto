@@ -1,10 +1,6 @@
 {
- "generated": "2026-11-10",
- "note": "Chart-analysis signals (SMC / Fibonacci / patterns) lost money on real data: -0.55R per trade on 12071 trades. Switched off.",
- "disabled": [
-  "Method: SMC",
-  "Method: FIB",
-  "Method: PAT"
- ],
+ "generated": "2026-11-12",
+ "note": "Refactored SMC, Fibonacci, and Chart Pattern engines active on closed candles.",
+ "disabled": [],
  "signals": {}
 }
