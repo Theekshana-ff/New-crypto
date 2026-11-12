@@ -6,7 +6,7 @@ const cdn=s=>`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/
 function fb(el,s){if(!el.dataset.f){el.dataset.f=1;el.src=cdn(s)}else el.outerHTML=`<i class="lg">${s[0]}</i>`}
 const logo=s=>{s=String(s).replace(/[^A-Za-z0-9]/g,'');return `<img class="lgo" src="${cdn(s)}" alt="" onerror="fb(this,'${s}')">`};
 const GC={'A+':'#f0b429',A:'#2ecc9a',B:'#4ea1ff',C:'#8a9bb0'};
-const MPAGE={SMC:'smc.html',FIB:'fibonacci.html',PAT:'patterns.html',STRAT:'signals.html'};
+const MPAGE={SMC:'smc.html',FIB:'fibonacci.html',PAT:'patterns.html',STRAT:'smc.html'};
 
 setInterval(function t(){
  const d=new Date();
@@ -31,7 +31,6 @@ async function kl(sym,tf,lim=350){
 
 let ST={enabled:[]},ALL_SIGS=[],FILT_M='ALL';
 
-// Load validated strategy rules
 (async()=>{
  try{const r=await fetch('/strategy.json');if(r.ok)ST=await r.json()}catch(e){}
  ST.enabled=ST.enabled||[];
@@ -40,7 +39,6 @@ let ST={enabled:[]},ALL_SIGS=[],FILT_M='ALL';
   (ST.enabled.length?'<table>'+ST.enabled.map(e=>`<tr><td><b>${e.name}</b><br><small class="msg">${e.tf} · SL ${e.cfg.k}×ATR · TP ${e.cfg.m}R</small></td><td>${e.stats.trades} trades<br><small class="msg">${(e.stats.hitRate*100).toFixed(0)}% wins</small></td><td><small class="msg">expectancy</small><br>train ${e.stats.expTrain>=0?'+':''}${e.stats.expTrain}R<br>val ${e.stats.expValidation>=0?'+':''}${e.stats.expValidation}R<br>test ${e.stats.expTest>=0?'+':''}${e.stats.expTest}R</td></tr>`).join('')+'</table><p class="msg">Tested '+(ST.generated?new Date(ST.generated).toLocaleDateString():'')+' on '+(ST.coins||[]).length+' coins. Past results do not guarantee future profit.</p>':'<p class="msg">Strategy rules ready. Use the scanner above to scan SMC, Fibonacci &amp; Chart Patterns across the top 30 coins.</p>');
 })();
 
-// Scan a single coin + timeframe across all 4 methods (SMC, FIB, PAT, STRAT)
 function analyzeCoinTF(sym,tf,c,td){
  const found=[],last=c[c.length-1].close;
  const A=SMC.analyze(c,/m$/.test(tf)?5:4);
@@ -94,7 +92,8 @@ function analyzeCoinTF(sym,tf,c,td){
      d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(x=>x.p),rr:p.tps[0]?p.tps[0].rr:2,
      inZone:isBrk||dist<=0.006,dist,grade:g,pts,
      status:isBrk?`🔥 ${p.status}`:pp(last,p.entry)+' to breakout/entry',
-     why:`${p.names[0]} (${p.status}) · Target RR ${(p.tps[0]?.rr||1.5).toFixed(1)}`
+     why:`${p.names[0]} (${p.status}) · Target RR ${(p.tps[0]?.rr||1.5).toFixed(1)}`,
+     brk:p.brk
     });
    }
   }
@@ -110,7 +109,7 @@ function analyzeCoinTF(sym,tf,c,td){
     const pl=STRAT.plan(P,i,e.cfg,d,last);
     found.push({
      sym,tf,method:'STRAT',mLabel:e.name,
-     d,entry:pl.entry,sl:pl.sl,tps:[pl.tp],rr:e.cfg.m||2,
+     d,entry:pl.entry,sl:pl.sl,tps:[pl.tp,pl.tp],rr:e.cfg.m||2,
      inZone:true,dist:0,grade:'A',pts:8,
      status:'🔥 Candle Closed Signal',
      why:`Validated Rule: ${e.name} (SL ${e.cfg.k}×ATR, TP ${e.cfg.m}R)`
@@ -119,7 +118,6 @@ function analyzeCoinTF(sym,tf,c,td){
   }
  }
 
- // Boost score if multiple methods agree on the same coin, timeframe & direction (Confluence!)
  for(const s of found){
   const others=found.filter(o=>o!==s&&o.d===s.d&&o.method!==s.method);
   if(others.length){
@@ -131,11 +129,10 @@ function analyzeCoinTF(sym,tf,c,td){
  return found;
 }
 
-// Calculate and render which method is trending right now
 function renderTrending(){
  const box=$('TR');if(!box)return;
  if(!ALL_SIGS.length){
-  box.innerHTML='<h3>🔥 Trending Method &amp; Market Pulse</h3><p class="msg">No active setups found yet. Try scanning Top 30 coins across all timeframes.</p>';
+  box.innerHTML='<h3>🔥 Trending Method &amp; Market Pulse</h3><p class="msg">No active setups found yet. Tap "Scan Top 30 Coins" below.</p>';
   return;
  }
 
@@ -176,7 +173,6 @@ function renderTrending(){
   </table>`;
 }
 
-// Render filtered signals table with correct dynamic coin chart links (?sym=...)
 function renderResults(){
  const out=$('out'),onlyZone=$('sstat').value==='zone';
  let list=ALL_SIGS.filter(s=>(FILT_M==='ALL'||s.method===FILT_M)&&(!onlyZone||s.inZone));
@@ -193,10 +189,8 @@ function renderResults(){
    ${list.slice(0,45).map((s,idx)=>{
     const confTag=s.confluence?`<br><span class="tag up" style="font-size:0.75em">⚡ Confluence: ${s.method} + ${s.confluence.join(' + ')}</span>`:'';
     const tpStr=(s.tps||[]).slice(0,2).map((p,i)=>`TP${i+1}: ${pf(p)}`).join(' · ');
-    
-    // Correctly link to the specific coin's chart page using ?sym=SYM
-    const targetPage = MPAGE[s.method] || 'smc.html';
-    const chartLink = `${targetPage}?sym=${s.sym}`;
+    const targetPage=MPAGE[s.method]||'smc.html';
+    const chartLink=`${targetPage}?sym=${encodeURIComponent(s.sym)}&tf=${encodeURIComponent(s.tf)}`;
 
     return `<tr>
      <td>${logo(s.sym)} <b>${s.sym}</b> <small class="msg">${s.tf}</small><br><span class="tag ${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span> <span class="grade" style="background:${GC[s.grade]||'#4ea1ff'}">${s.grade}</span></td>
@@ -215,13 +209,12 @@ function renderResults(){
  document.querySelectorAll('.takeBtn').forEach(b=>b.onclick=()=>{
   const s=list[+b.dataset.i];if(!s)return;
   if(typeof Ctx!=='undefined'&&Ctx.addTrade){
-   Ctx.addTrade({method:s.method,sym:s.sym,tf:s.tf,d:s.d,entry:s.entry,sl:s.sl,tps:s.tps});
+   Ctx.addTrade({method:s.method,sym:s.sym,tf:s.tf,d:s.d,entry:s.entry,sl:s.sl,tps:s.tps,brk:s.brk});
    b.textContent='✓ Added';
   }
  });
 }
 
-// Run scanner on a list of coins
 async function runScan(coinList){
  const out=$('out');
  const tfSel=$('stf').value;
@@ -251,7 +244,6 @@ async function runScan(coinList){
  renderResults();
 }
 
-// Button: Scan Top 30 Coins by 24h USDT Volume
 $('scan30').onclick=async()=>{
  const out=$('out');
  out.innerHTML='<p class="msg">Fetching Top 30 most traded USDT coins from Binance...</p>';
@@ -268,14 +260,12 @@ $('scan30').onclick=async()=>{
  }
 };
 
-// Button: Scan custom typed coins
 $('scanCustom').onclick=async()=>{
  const list=$('coins').value.split(',').map(x=>x.trim().toUpperCase().replace(/USDT$/,'')).filter(Boolean).slice(0,30);
  if(!list.length)return;
  await runScan(list);
 };
 
-// Method filter buttons & dropdowns
 document.querySelectorAll('.mflt').forEach(b=>b.onclick=()=>{
  FILT_M=b.dataset.m;
  document.querySelectorAll('.mflt').forEach(x=>x.classList.toggle('on',x===b));
