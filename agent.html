@@ -29,7 +29,6 @@
 </nav>
 
 <main>
-  <!-- MEXC Account & Agent Controls -->
   <section class="card" style="margin-bottom:12px">
     <h3>⚙️ MEXC Futures AI Agent Control Panel</h3>
     <div class="rin" style="margin-top:8px">
@@ -55,6 +54,15 @@
           <option value="4h">4h (Trend)</option>
         </select>
       </label>
+      <label>Max Open Positions
+        <input id="maxOpen" type="number" min="1" max="10" value="2">
+      </label>
+      <label>🛡️ Auto-Close Profit Target (ROE %)
+        <input id="tpRoe" type="number" min="0" step="5" value="25" placeholder="0 = Off">
+      </label>
+      <label>🛡️ Auto-Close Stop Loss (ROE -%)
+        <input id="slRoe" type="number" min="0" step="5" value="15" placeholder="0 = Off">
+      </label>
     </div>
 
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
@@ -69,19 +77,21 @@
     <p id="statusMsg" class="msg" style="margin-top:8px">Enter your Agent Password and click Refresh or Execute.</p>
   </section>
 
-  <!-- MEXC Futures Balance Summary -->
   <section class="card" id="BAL" style="margin-bottom:12px">
     <h3>💼 MEXC Futures Account</h3>
     <p class="msg">Connect with your Agent Password to view live USDT balance &amp; active trades.</p>
   </section>
 
-  <!-- Live Open Positions & Profit/Loss Tracker -->
   <section class="card" id="POS" style="margin-bottom:12px">
     <h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3>
     <p class="msg">No active positions loaded yet.</p>
   </section>
 
-  <!-- Live Trend Detection Chart -->
+  <section class="card" id="AI_BRAIN" style="margin-bottom:12px">
+    <h3>🧠 Latest AI Deep Analysis, Method &amp; Top 3 Radar</h3>
+    <p class="msg">Run a scan to see which Analysis Method (SMC / Fibonacci / EMA / RSI) Gemini AI used to pick the trade.</p>
+  </section>
+
   <section class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
       <h3 id="chartHeader" style="margin:0">📈 Live AI Trend &amp; Position Chart (BTC/USDT)</h3>
@@ -91,9 +101,8 @@
     <p class="msg" style="margin-top:6px">Blue Line = Fast EMA 20 · Orange Line = Slow EMA 50 · Dashed Lines = Active Entry / SL / TP</p>
   </section>
 
-  <!-- AI Agent Execution History Log -->
   <section class="card" id="LOG">
-    <h3>📜 AI Agent Trade Log (Executed History)</h3>
+    <h3>📜 AI Agent Trade Log (Method &amp; Executed History)</h3>
     <div id="logList"><p class="msg">No trades executed by AI Agent in this session yet.</p></div>
   </section>
 </main>
