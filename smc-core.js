@@ -2,7 +2,6 @@
 (function(root){
 const atrOf=(c,n)=>{let s=0,k=0;for(let i=Math.max(1,c.length-n);i<c.length;i++){s+=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));k++}return s/k||0};
 
-// Wilder's RSI helper for accurate momentum filtering
 const calcRSI=(c,n=14)=>{
  if(c.length<=n)return 50;
  let g=0,l=0;
@@ -16,7 +15,6 @@ function analyze(c, L=4){
  if(!Array.isArray(c)||c.length<L*2+5){
   return{atr:0,piv:[],pivRaw:[],ev:[],obs:[],fvg:[],liq:[],idm:[],trend:0,range:{hh:0,ll:0,eq:0},sweepsAll:[],sweeps:[]};
  }
- // Keep exact array indices intact so smc.js chart markers/boxes never crash
  const n=c.length, atr=atrOf(c,50), piv=[];
  for(let i=L;i<n-L;i++){let h=1,l=1;for(let j=i-L;j<=i+L;j++){if(j===i)continue;
   if(j<i?c[j].high>=c[i].high:c[j].high>c[i].high)h=0;
@@ -24,7 +22,6 @@ function analyze(c, L=4){
   if(h)piv.push({t:'H',i,p:c[i].high});if(l)piv.push({t:'L',i,p:c[i].low})}
  piv.sort((a,b)=>a.i-b.i);
 
- // Keep meaningful swings based on local ATR
  const trs=c.map((x,i)=>i?Math.max(x.high-x.low,Math.abs(x.high-c[i-1].close),Math.abs(x.low-c[i-1].close)):x.high-x.low),atrAt=i=>{let a=0,m=0;for(let j=Math.max(0,i-13);j<=i;j++){a+=trs[j];m++}return a/m};
  const kS=L<=3?1:L<=5?1.5:L<=6?2:3,zz=[];
  for(const p of piv){const l=zz[zz.length-1];if(!l){zz.push(p);continue}
@@ -32,19 +29,16 @@ function analyze(c, L=4){
   if(Math.abs(p.p-l.p)>=kS*atrAt(p.i))zz.push(p)}
  const pivRaw=piv.slice();piv.length=0;zz.forEach(p=>piv.push(p));
 
- // Track sweeps vs structural breaks
  for(const p of piv){p.st='open';for(let j=p.i+1;j<n;j++){
   if(p.t==='H'&&c[j].high>p.p){p.at=j;p.st=c[j].close<p.p?'sweep':'broke';break}
   if(p.t==='L'&&c[j].low<p.p){p.at=j;p.st=c[j].close>p.p?'sweep':'broke';break}}}
 
- // BOS / CHoCH
  const ev=[];let trend=0,hi=null,lo=null,pi=0;
  for(let i=0;i<n;i++){
   while(pi<piv.length&&piv[pi].i+L<=i){const p=piv[pi++];if(p.t==='H')hi={...p,done:0};else lo={...p,done:0}}
   if(hi&&!hi.done&&c[i].close>hi.p){ev.push({k:trend===-1?'CHoCH':'BOS',d:1,p:hi.p,from:hi.i,to:i});hi.done=1;trend=1}
   if(lo&&!lo.done&&c[i].close<lo.p){ev.push({k:trend===1?'CHoCH':'BOS',d:-1,p:lo.p,from:lo.i,to:i});lo.done=1;trend=-1}}
 
- // Order blocks: scan back up to 5 bars from extreme and invalidate on true candle CLOSE beyond zone
  const obs=[];
  for(const e of ev){let m=e.from;
   for(let j=e.from;j<=e.to;j++)if(e.d===1?c[j].low<c[m].low:c[j].high>c[m].high)m=j;
@@ -61,7 +55,6 @@ function analyze(c, L=4){
   if(o.taps>3)o.mit=1;
   obs.push(o)}
 
- // Fair value gaps: invalidate on candle CLOSE beyond FVG boundary or deep 50% mitigation + expansion
  const fvg=[],g=atr*0.25;
  for(let i=2;i<n;i++){
   if(c[i].low-c[i-2].high>g)fvg.push({d:1,i:i-1,top:c[i].low,bot:c[i-2].high,mit:0});
@@ -71,7 +64,6 @@ function analyze(c, L=4){
   if(f.d===1?(c[j].close<f.bot||(c[j].low<=mid&&c[j].close>f.top+atr)):(c[j].close>f.top||(c[j].high>=mid&&c[j].close<f.bot-atr))){f.mit=1;f.end=j;break}
  }
 
- // Liquidity: equal highs/lows (find all distinct pools without premature outer break)
  const liq=[],usedPiv=new Set();
  for(const t of ['H','L']){const ps=piv.filter(p=>p.t===t&&p.st!=='broke');
   for(let a=0;a<ps.length;a++){if(usedPiv.has(ps[a].i))continue;
@@ -79,13 +71,10 @@ function analyze(c, L=4){
     liq.push({t,p:t==='H'?Math.max(ps[a].p,ps[b].p):Math.min(ps[a].p,ps[b].p),from:ps[a].i,st:ps[b].st,at:ps[b].at});
     usedPiv.add(ps[a].i);usedPiv.add(ps[b].i);break}}}
 
- // Filter displacement and size
  for(let k=obs.length-1;k>=0;k--){const o=obs[k];if(!(fvg.some(f=>f.d===o.d&&f.i>o.i&&f.i<=o.to)||c.slice(o.i+1,o.to+1).some(x=>(o.d===1?x.close-x.open:x.open-x.close)>=1.2*atr))||o.top-o.bot>3*atr)obs.splice(k,1)}
 
- // OB + FVG confluence
- for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===o.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
+ for(const o of obs)o.conf=fvg.some(f=>!f.mit&&f.d===f.d&&f.bot<o.top&&f.top>o.bot&&f.i>=o.i-1&&f.i<=o.i+10);
 
- // IDM (inducement) + tracking whether IDM was actually swept
  const p2=[];for(let i=2;i<n-2;i++){if([-2,-1,1,2].every(k=>c[i].high>c[i+k].high))p2.push({t:'H',i,p:c[i].high});if([-2,-1,1,2].every(k=>c[i].low<c[i+k].low))p2.push({t:'L',i,p:c[i].low})}
  const idm=[];
  for(const e of ev.slice(-8)){const q=p2.filter(p=>p.t===(e.d===1?'L':'H')&&p.i>e.from&&p.i<e.to).pop();if(!q)continue;
@@ -93,7 +82,6 @@ function analyze(c, L=4){
   for(let j=q.i+1;j<n;j++)if(e.d===1?c[j].low<q.p:c[j].high>q.p){to=j;swept=1;break}
   idm.push({d:e.d,p:q.p,i:q.i,to:Math.max(to,q.i+1),swept})}
 
- // Dealing Range (True structural leg range with fallback)
  const lastEv=ev[ev.length-1],lastH=[...piv].reverse().find(p=>p.t==='H'),lastL=[...piv].reverse().find(p=>p.t==='L');let hh,ll;
  if(lastEv){
   const leg=c.slice(lastEv.from,n);
@@ -111,21 +99,17 @@ function setup(c,A){
  const side=z=>d===1?z.bot<last:z.top>last,pd=z=>d===1?(z.top+z.bot)/2<=A.range.eq:(z.top+z.bot)/2>=A.range.eq;
  const ob=A.obs.filter(o=>!o.mit&&o.d===d&&side(o)),fg=A.fvg.filter(f=>!f.mit&&f.d===d&&side(f));
 
- // Strict High-Probability Zone Selection (Require Confluence or Premium/Discount)
  const t=[ob.filter(o=>o.conf&&pd(o)),ob.filter(o=>o.conf),ob.filter(pd),fg.filter(pd)].find(x=>x.length);
  if(!t)return{d,none:1};
  const z=t[t.length-1],src=z.k?'Order Block':'FVG';
 
- // Require Liquidity Sweep OR Inducement (IDM) sweep
  const sw=A.sweepsAll.filter(x=>x.t===(d===1?'L':'H')&&x.at>=z.i-15).pop();
  const idmSwept=A.idm.some(id=>id.d===d&&id.swept&&id.i>=z.i);
  if(!sw&&!idmSwept&&!(z.conf&&pd(z)))return{d,none:1};
 
- // Wilder's RSI Confluence Filter (Prevent buying when already overbought >70 or selling when oversold <30)
  const rsiVal=calcRSI(c,14);
  if((d===1&&rsiVal>70)||(d===-1&&rsiVal<30))return{d,none:1};
 
- // Candle Rejection / Momentum Confirmation when price is near/inside the zone
  const nearZone=d===1?lastC.low<=z.top+A.atr*0.3:lastC.high>=z.bot-A.atr*0.3;
  if(nearZone){
   const reject=d===1?(lastC.close>lastC.open||(lastC.close-lastC.low)>(lastC.high-lastC.low)*0.5):(lastC.close<lastC.open||(lastC.high-lastC.close)>(lastC.high-lastC.low)*0.5);
@@ -133,7 +117,6 @@ function setup(c,A){
   if(!reject||strongAgainst)return{d,none:1};
  }
 
- // Stop-Loss Buffer (0.65 ATR to avoid stop-hunts)
  const entry=(z.top+z.bot)/2,sl=d===1?z.bot-A.atr*0.65:z.top+A.atr*0.65,risk=Math.abs(entry-sl);
  if(Math.abs(last-entry)>8*A.atr)return{d,none:1,far:1};
 
@@ -149,7 +132,6 @@ function setup(c,A){
  return{d,src,z,entry,sl,tps,last,inside:last<=z.top&&last>=z.bot,conf:!!z.conf,pd:pd(z),sweep:!!(sw||idmSwept),sweepAgo:sw?c.length-1-sw.at:0};
 }
 
-// Top-down: daily bias -> 4H sweep -> 1H OB -> 15M MSS
 function topDown(D){
  const ago=(c,i)=>c.length-1-i,A1=analyze(D['1d']),dir=A1.trend,items=[],e1=A1.ev[A1.ev.length-1];
  items.push({tf:'1D',ok:!!dir,label:'Daily bias',detail:dir&&e1?`${dir>0?'Bullish':'Bearish'} · last ${e1.k} ${e1.d>0?'↑':'↓'}`:'No clear structure'});
@@ -217,7 +199,7 @@ function backtest(c,step=4,gen){
 }
 
 function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
- s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.nM/s.nM:0;return s}
+ s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
 
 root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim,simX};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
