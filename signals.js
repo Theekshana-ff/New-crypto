@@ -131,7 +131,7 @@ function analyzeCoinTF(sym,tf,c,td){
  return found;
 }
 
-// Calculate and render which method (SMC vs Fibonacci vs Chart Patterns) is trending right now
+// Calculate and render which method is trending right now
 function renderTrending(){
  const box=$('TR');if(!box)return;
  if(!ALL_SIGS.length){
@@ -176,7 +176,7 @@ function renderTrending(){
   </table>`;
 }
 
-// Render filtered signals table with Entry, SL, TP, Confluence & direct action buttons
+// Render filtered signals table with correct dynamic coin chart links (?sym=...)
 function renderResults(){
  const out=$('out'),onlyZone=$('sstat').value==='zone';
  let list=ALL_SIGS.filter(s=>(FILT_M==='ALL'||s.method===FILT_M)&&(!onlyZone||s.inZone));
@@ -193,13 +193,18 @@ function renderResults(){
    ${list.slice(0,45).map((s,idx)=>{
     const confTag=s.confluence?`<br><span class="tag up" style="font-size:0.75em">⚡ Confluence: ${s.method} + ${s.confluence.join(' + ')}</span>`:'';
     const tpStr=(s.tps||[]).slice(0,2).map((p,i)=>`TP${i+1}: ${pf(p)}`).join(' · ');
+    
+    // Correctly link to the specific coin's chart page using ?sym=SYM
+    const targetPage = MPAGE[s.method] || 'smc.html';
+    const chartLink = `${targetPage}?sym=${s.sym}`;
+
     return `<tr>
      <td>${logo(s.sym)} <b>${s.sym}</b> <small class="msg">${s.tf}</small><br><span class="tag ${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span> <span class="grade" style="background:${GC[s.grade]||'#4ea1ff'}">${s.grade}</span></td>
      <td><b>${s.mLabel}</b>${confTag}<br><small class="msg">${s.why}</small></td>
      <td><b class="${s.inZone?'up':'msg'}">${s.status}</b></td>
      <td><b style="color:#f0b429">Entry: ${pf(s.entry)}</b><br><span class="down">SL: ${pf(s.sl)}</span><br><span class="up">${tpStr}</span></td>
      <td>
-      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="${MPAGE[s.method]||'smc.html'}">📈 Chart</a>
+      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="${chartLink}">📈 Chart</a>
       <button class="moreBtn takeBtn" data-i="${idx}" style="margin:2px 0">📒 Trade</button>
       <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="risk.html?e=${s.entry}&s=${s.sl}&t1=${s.tps[0]||''}">Risk</a>
      </td>
