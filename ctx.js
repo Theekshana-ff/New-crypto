@@ -1,9 +1,15 @@
+// File: ctx.js
 // Shared: market context (BTC trend, volume, volatility, funding/OI, news), trade journal helpers, multi-coin backtest UI
 const Ctx=(()=>{
  const ls={get:(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k));return v==null?d:v}catch(e){return d}},set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}};
  const memo={};const cached=async(k,ttl,fn)=>{const e=memo[k];if(e&&Date.now()-e.t<ttl)return e.v;let v=null;try{v=await fn()}catch(x){}memo[k]={t:Date.now(),v};return v};
- async function kl(sym,tf,lim,start){const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
-  return(await r.json()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}))}
+ async function kl(sym,tf,lim,start){
+  const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
+  const now=Date.now(),raw=await r.json();
+  const closed=raw.filter(x=>x[6]<=now);
+  const use=closed.length>=30?closed:raw.slice(0,-1);
+  return use.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
+ }
  const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
  const sleep=ms=>new Promise(r=>setTimeout(r,ms));
  const btc=()=>cached('btc',300000,async()=>{const[h4,d1]=await Promise.all([kl('BTC','4h',300),kl('BTC','1d',200)]),w=h4.slice(-50),
@@ -15,7 +21,7 @@ const Ctx=(()=>{
  async function get(sym,c,tf){if(!c||c.length<60)c=await kl(sym,tf||'1h',80);
   const[b,d,ev]=await Promise.all([btc(),deriv(sym),events()]),n=c.length-1,avg=c.slice(n-20,n).reduce((s,x)=>s+(x.vol||0),0)/20,rv=avg?c[n-1].vol/avg:null,now=Date.now();
   return{btc:b,deriv:d,rv,atrR:avgTR(c,14)/avgTR(c,Math.min(50,n)),near:(ev||[]).find(e=>e.t-now<=3600e3&&now-e.t<=1800e3)||null,hasEv:!!ev}}
- // score a setup direction against the context: pts -3..+3, notes, and blocking flags for alert filters
+
  function evalCtx(cx,dir,sym){const notes=[],block={};let pts=0;const T=t=>t>0?'Bullish':t<0?'Bearish':'Neutral';
   if(cx.btc){const b=cx.btc;notes.push({ok:null,text:`BTC 4h ${T(b.t4)} · 1d ${T(b.t1)} · ${b.range?'ranging':'trending'}`});
    if(dir&&sym!=='BTC'){const al=(b.t4===dir)+(b.t1===dir),op=(b.t4===-dir)+(b.t1===-dir);if(al===2){pts++;notes.push({ok:true,text:'Setup follows BTC trend'})}else if(op>=1){pts--;block.btc=true;notes.push({ok:false,text:'Setup is against BTC trend'})}}
@@ -33,21 +39,36 @@ const Ctx=(()=>{
   const e=evalCtx(cx,o.dir,o.sym),G2=o.G?regrade(o.G,e.pts):null,GC={'A+':'#f0b429',A:'#2ecc9a',B:'#4ea1ff',C:'#8a9bb0'};
   el.innerHTML='<h3>Market context</h3>'+(G2?`<p>Grade <span class="grade" style="background:${GC[o.G.g]}">${o.G.g}</span> → with context <span class="grade" style="background:${GC[G2.g]}">${G2.g}</span> <span class="msg">(${e.pts>=0?'+':''}${e.pts})</span></p>`:'')+
    e.notes.map(n=>`<p>${n.ok===true?'<span class="up">✓</span>':n.ok===false?'<span class="down">✗</span>':'•'} ${n.text}</p>`).join('')+(cx.hasEv?'':'<p class="msg">News calendar not available.</p>')+(cx.deriv?'':'<p class="msg">Funding / OI data not available.</p>')}
+
  // trade journal
  const journal=()=>ls.get('journal',[]);
  function toast(m){let t=document.createElement('div');t.className='toast';t.textContent=m;t.onclick=()=>t.remove();document.body.appendChild(t);setTimeout(()=>t.remove(),4000)}
- function addTrade(t){const r=ls.get('smcRisk',{a:1000,r:1}),l=journal();l.unshift({...t,id:Date.now(),t:Math.floor(Date.now()/1000),risk:r.a*r.r/100});ls.set('journal',l.slice(0,200));toast('Added to Trade journal ✓')}
- function evalTrade(s,c,mg){const long=s.d===1,rr1=Math.abs(s.tps[0]-s.entry)/Math.abs(s.entry-s.sl),rr2=Math.abs(s.tps[1]-s.entry)/Math.abs(s.entry-s.sl);let st='pending',hit=0,stop=s.sl;
+ function addTrade(t){
+  const r=ls.get('smcRisk',{a:1000,r:1}),l=journal();
+  const normTps=(t.tps||[]).map(x=>typeof x==='object'?x.p:x);
+  l.unshift({...t,tps:normTps,id:Date.now(),t:Math.floor(Date.now()/1000),risk:r.a*r.r/100});
+  ls.set('journal',l.slice(0,200));toast('Added to Trade journal ✓');
+ }
+ function evalTrade(s,c,mg){
+  const tps=(s.tps||[]).map(x=>typeof x==='object'?x.p:x);
+  if(!tps.length)return{st:'pending',hit:0,R:null,part:null};
+  const long=s.d===1,risk=Math.abs(s.entry-s.sl)||1e-9;
+  const tp1=tps[0],tp2=tps[1]!=null?tps[1]:tp1;
+  const rr1=Math.abs(tp1-s.entry)/risk,rr2=Math.abs(tp2-s.entry)/risk;
+  let st='pending',hit=0,stop=s.sl;
   for(const k of c){const lo=k.low,hi=k.high;
-   if(st==='pending'){const en=s.brk?(long?hi>=s.entry:lo<=s.entry):(long?lo<=s.entry:hi>=s.entry),slh=long?lo<=s.sl:hi>=s.sl;if(en){st='open';if(slh){st='sl';break}continue}if(s.brk?slh:(long?hi>=s.tps[0]:lo<=s.tps[0])){st='missed';break}continue}
+   if(st==='pending'){const en=s.brk?(long?hi>=s.entry:lo<=s.entry):(long?lo<=s.entry:hi>=s.entry),slh=long?lo<=s.sl:hi>=s.sl;if(en){st='open';if(slh){st='sl';break}continue}if(s.brk?slh:(long?hi>=tp1:lo<=tp1)){st='missed';break}continue}
    if(long?lo<=stop:hi>=stop){st=hit?(mg?'be':'tp'):'sl';break}
-   s.tps.forEach((p,i)=>{if(long?hi>=p:lo<=p)hit=Math.max(hit,i+1)});if(mg&&hit>=1)stop=s.entry;
-   if(mg?hit>=2:hit>=1){st='tp';break}}
-  let R=null;if(st==='sl')R=-1;else if(st==='be')R=0.5*rr1;else if(st==='tp')R=mg?0.5*rr1+0.5*rr2:rr1;
-  return{st,hit,R,part:st==='open'&&hit>=1&&mg?0.5*rr1:null}}
+   tps.forEach((p,i)=>{if(long?hi>=p:lo<=p)hit=Math.max(hit,i+1)});if(mg&&hit>=1)stop=s.entry;
+   if(mg&&tps.length>=2?hit>=2:hit>=1){st='tp';break}}
+  let R=null;if(st==='sl')R=-1;else if(st==='be')R=0.5*rr1;else if(st==='tp')R=(mg&&tps.length>=2)?0.5*rr1+0.5*rr2:rr1;
+  return{st,hit,R,part:st==='open'&&hit>=1&&mg?0.5*rr1:null};
+ }
+
  async function top30(){return(await(await fetch('https://data-api.binance.vision/api/v3/ticker/24hr')).json()).filter(t=>t.symbol.endsWith('USDT')&&!/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD/.test(t.symbol)).sort((a,b)=>b.quoteVolume-a.quoteVolume).slice(0,30).map(t=>t.symbol.replace('USDT',''))}
- // backtest card: this coin or top 30 coins, one or three time frames
+
  function mountBacktest(el,o){
+  if(!el)return;
   el.innerHTML='<h3>Backtest</h3><p class="msg">Runs this method on past candles (1000 per run). More coins and time frames = more reliable numbers.</p><div class="rin"><select id="btm"><option value="1">This coin</option><option value="30">Top 30 coins</option></select><select id="btt"><option value="1">This time frame</option><option value="3">15m + 1h + 4h</option></select></div><button id="btRun" class="moreBtn">Run backtest</button><div id="btout"></div>';
   const out=el.querySelector('#btout');
   el.querySelector('#btRun').onclick=async()=>{out.textContent='Starting...';
@@ -57,11 +78,10 @@ const Ctx=(()=>{
     out.innerHTML=r.resolved?`<p>${coins.length} coin(s) × ${tfs.length} time frame(s): setups <b>${r.setups}</b>, finished trades <b>${r.resolved}</b></p><p class="up">TP1 hit: <b>${pc(r.wins,r.resolved)}</b> · TP2: ${pc(r.tp2,r.resolved)} · TP3: ${pc(r.tp3,r.resolved)}</p><p class="down">SL first: <b>${pc(r.losses,r.resolved)}</b></p><p>Expectancy per trade: <b>${sg(r.exp)}</b> exit all at TP1 · <b>${sg(r.expM)}</b> managed (50% at TP1, stop to breakeven, rest to TP2)</p><p>With SMC confluence: ${r.strongN?pc(r.strongWin,r.strongN)+' win ('+r.strongN+' trades)':'none'}</p><p class="msg">Past results do not guarantee future results. Fees and slippage are not included.</p>`:'<p class="msg">Not enough finished setups. Try more coins or time frames.</p>'}
    catch(e){out.textContent='Could not run the backtest right now.'}}}
 
- // honest check of a trade plan: logical order, fees, break-even win rate, and the method's own record on this coin
  const evCache={};
  async function evidence(el,o){if(!el)return;const s=o.setup;
   if(!s||!s.entry||!s.sl||!s.tps||!s.tps.length){el.innerHTML='<h3>Reality check</h3><p class="msg">No trade plan on this chart right now.</p>';return}
-  const FEE=0.0012,risk=Math.abs(s.entry-s.sl),p1=s.tps[0].p,rr1=Math.abs(p1-s.entry)/risk,feeR=FEE*s.entry/risk,be=(1+feeR)/(rr1+1),ok=s.d>0?(s.sl<s.entry&&s.entry<p1):(p1<s.entry&&s.entry<s.sl);
+  const FEE=0.0012,risk=Math.abs(s.entry-s.sl)||1e-9,p1=typeof s.tps[0]==='object'?s.tps[0].p:s.tps[0],rr1=Math.abs(p1-s.entry)/risk,feeR=FEE*s.entry/risk,be=(1+feeR)/(rr1+1),ok=s.d>0?(s.sl<s.entry&&s.entry<p1):(p1<s.entry&&s.entry<s.sl);
   const h='<h3>Reality check</h3>'+`<p>Stop distance <b>${(risk/s.entry*100).toFixed(2)}%</b> · TP1 = <b>${rr1.toFixed(2)}R</b> · fees ≈ <b>${feeR.toFixed(2)}R</b> per trade</p><p>To break even at TP1 this trade must win <b>${(be*100).toFixed(0)}%</b> of the time.</p>`+(ok?'':'<p class="down">⚠ Entry / SL / TP are not in a logical order. Do not trade this.</p>')+(feeR>0.25?'<p class="down">⚠ The stop is so tight that fees take over a quarter of every loss.</p>':'');
   const key=o.sym+'|'+o.tf+'|'+o.method;let r=evCache[key];
   if(!r||Date.now()-r.t>600000){el.innerHTML=h+'<p class="msg">Testing this method on the last 1000 candles of this coin...</p>';
