@@ -60,7 +60,7 @@ async function getTop30MarketData() {
 }
 
 // Ask Gemini AI to pick the single best high-probability Futures trade from Top 30
-async function pickBestCoinWithGemini(marketList, timeframe, riskPercent) {
+async function pickBestCoinWithGemini(marketList, timeframe) {
   const geminiKey = process.env.GEMINI_API_KEY;
   if (!geminiKey) throw new Error('GEMINI_API_KEY is missing in Vercel Environment Variables.');
 
@@ -106,11 +106,8 @@ async function openFuturesPosition(pick, marginUsdt, leverage) {
   const contractSize = Number(detail.contractSize || 1);
   const price = Number(pick.entry);
 
-  // Calculate contract volume: (Margin * Leverage) / (Price * ContractSize)
   const notional = marginUsdt * leverage;
   const vol = Math.max(1, Math.floor(notional / (price * contractSize)));
-
-  // side: 1 = Open Long, 3 = Open Short | openType: 1 = Isolated, 2 = Cross
   const side = pick.direction === 'LONG' ? 1 : 3;
 
   const orderPayload = {
@@ -119,7 +116,7 @@ async function openFuturesPosition(pick, marginUsdt, leverage) {
     vol,
     leverage,
     side,
-    type: 5, // 5 = Market Order
+    type: 5, // Market Order
     openType: 1, // Isolated margin
     stopLossPrice: Number(pick.sl),
     takeProfitPrice: Number(pick.tp)
@@ -140,7 +137,6 @@ module.exports = async (req, res) => {
 
     const action = body.action || 'status';
 
-    // 1. Fetch Live Open Positions & Live PnL from MEXC Futures
     if (action === 'status') {
       const [positions, assets] = await Promise.all([
         mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
@@ -162,6 +158,7 @@ module.exports = async (req, res) => {
           direction: isLong ? 'LONG' : 'SHORT',
           leverage: p.leverage,
           entryPrice: entry,
+          holdVol,
           margin: im.toFixed(2),
           pnl: unrealizedPnl.toFixed(2),
           roe: roePct,
@@ -177,7 +174,6 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 2. Scan Top 30 Coins -> Pick Best with Gemini AI -> Execute Futures Trade
     if (action === 'scan_and_trade') {
       const marginUsdt = Math.max(2, Number(body.marginUsdt) || 10);
       const leverage = Math.min(50, Math.max(1, Number(body.leverage) || 10));
@@ -195,10 +191,8 @@ module.exports = async (req, res) => {
       });
     }
 
-    // 3. Close an Open Futures Position Manually
     if (action === 'close') {
       const { symbol, positionId, direction, vol } = body;
-      // side: 4 = Close Long, 2 = Close Short
       const closeSide = direction === 'LONG' ? 4 : 2;
       const closeRes = await mexcReq('POST', '/api/v1/private/order/submit', {
         symbol,
