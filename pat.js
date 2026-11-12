@@ -6,8 +6,8 @@ function fb(el,s){if(!el.dataset.f){el.dataset.f=1;el.src=cdn(s)}else el.outerHT
 const logo=(s,img)=>{s=String(s).replace(/[^A-Za-z0-9]/g,'');return `<img class="lgo" src="${img||cdn(s)}" alt="" onerror="fb(this,'${s}')">`};
 const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
 const pp=(p,r)=>((p-r)/r*100).toFixed(2)+'%';
+const TFS=['1m','5m','15m','1h','4h','1d','1w'];
 
-// Fetch CLOSED candles only to prevent live-candle repainting
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){
  const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
@@ -173,14 +173,6 @@ let t;$('q').oninput=()=>{clearTimeout(t);const v=$('q').value.trim();if(v.lengt
   document.querySelectorAll('#sug li').forEach(l=>l.onmousedown=l.ontouchstart=e=>{e.preventDefault();$('q').value=l.dataset.s;$('sug').innerHTML='';S.img=l.dataset.i;load(l.dataset.s,1)})}catch(e){}},350)};
 $('q').onblur=()=>setTimeout(()=>$('sug').innerHTML='',150);
 
-renderSV();setInterval(renderSV,60000);
-
-// URL එකෙන් ?sym=XYZ කියවාගෙන අදාළ coin එක load කිරීම
-const urlParams = new URLSearchParams(window.location.search);
-const initSym = urlParams.get('sym') ? urlParams.get('sym').toUpperCase() : 'BTC';
-load(initSym, 1);
-setInterval(()=>load(S.sym,0),20000);
-
 window.getSetup=()=>{const p=cur();return p&&p.dir?{sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),src:p.names[0],price:S.c[S.c.length-1].close}:null};
 
 if(typeof Alerts!=='undefined'){
@@ -193,13 +185,28 @@ if(typeof Alerts!=='undefined'){
 }
 
 if(typeof Ctx!=='undefined'&&Ctx.mountBacktest){
- Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false,brk:p.brk}:null}});
+ Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false,brk:p.brk}:null}});
 }
 
 function ctxCard(){
+ if(typeof Ctx==='undefined')return;
  const p=cur();
  try{if(Ctx.card)Ctx.card($('CX'),{sym:S.sym,tf:S.tf,c:S.c,dir:p?p.dir:0,G:null})}catch(e){}
  try{if(Ctx.evidence)Ctx.evidence($('EV'),{sym:S.sym,tf:S.tf,method:'PAT'+(p?p.names[0]:''),gen:(sl,A)=>{const q=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return q?{d:q.dir,entry:q.entry,sl:q.sl,tps:q.tps,key:q.id,conf:false,brk:q.brk}:null},setup:p&&p.dir?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps}:null})}catch(e){}
 }
 {const _rd=renderD;renderD=function(){_rd.apply(this,arguments);ctxCard()}}
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||typeof Ctx==='undefined')return;const p=cur();if(!p||!p.dir)return;Ctx.addTrade({method:'Patterns',sym:S.sym,tf:S.tf,d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(t=>t.p),brk:p.brk})});
+
+renderSV();
+setInterval(renderSV,60000);
+
+const urlParams=new URLSearchParams(window.location.search);
+const initSym=urlParams.get('sym')?urlParams.get('sym').toUpperCase().replace(/USDT$/,''):'BTC';
+const initTf=urlParams.get('tf');
+if(initTf&&TFS.includes(initTf)){
+ S.tf=initTf;
+ document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x.dataset.tf===S.tf));
+}
+if($('q')&&initSym!=='BTC')$('q').value=initSym;
+load(initSym,1);
+setInterval(()=>load(S.sym,0),20000);
