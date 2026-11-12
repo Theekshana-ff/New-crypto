@@ -1,8 +1,22 @@
+// File: smc-core.js
 (function(root){
 const atrOf=(c,n)=>{let s=0,k=0;for(let i=Math.max(1,c.length-n);i<c.length;i++){s+=Math.max(c[i].high-c[i].low,Math.abs(c[i].high-c[i-1].close),Math.abs(c[i].low-c[i-1].close));k++}return s/k||0};
 
-function analyze(rawC, L=4){
- const c=Array.isArray(rawC)&&rawC.length>2&&rawC[rawC.length-1].isClosed===false?rawC.slice(0,-1):rawC;
+// Wilder's RSI helper for accurate momentum filtering
+const calcRSI=(c,n=14)=>{
+ if(c.length<=n)return 50;
+ let g=0,l=0;
+ for(let i=1;i<=n;i++){const d=c[i].close-c[i-1].close;d>0?g+=d:l-=d}
+ g/=n;l/=n;
+ for(let i=n+1;i<c.length;i++){const d=c[i].close-c[i-1].close;g=(g*(n-1)+Math.max(d,0))/n;l=(l*(n-1)+Math.max(-d,0))/n}
+ return l===0?100:100-100/(1+g/l);
+};
+
+function analyze(c, L=4){
+ if(!Array.isArray(c)||c.length<L*2+5){
+  return{atr:0,piv:[],pivRaw:[],ev:[],obs:[],fvg:[],liq:[],idm:[],trend:0,range:{hh:0,ll:0,eq:0},sweepsAll:[],sweeps:[]};
+ }
+ // Keep exact array indices intact so smc.js chart markers/boxes never crash
  const n=c.length, atr=atrOf(c,50), piv=[];
  for(let i=L;i<n-L;i++){let h=1,l=1;for(let j=i-L;j<=i+L;j++){if(j===i)continue;
   if(j<i?c[j].high>=c[i].high:c[j].high>c[i].high)h=0;
@@ -18,7 +32,7 @@ function analyze(rawC, L=4){
   if(Math.abs(p.p-l.p)>=kS*atrAt(p.i))zz.push(p)}
  const pivRaw=piv.slice();piv.length=0;zz.forEach(p=>piv.push(p));
 
- // Track sweeps vs structural breaks (on confirmed candles)
+ // Track sweeps vs structural breaks
  for(const p of piv){p.st='open';for(let j=p.i+1;j<n;j++){
   if(p.t==='H'&&c[j].high>p.p){p.at=j;p.st=c[j].close<p.p?'sweep':'broke';break}
   if(p.t==='L'&&c[j].low<p.p){p.at=j;p.st=c[j].close>p.p?'sweep':'broke';break}}}
@@ -30,39 +44,40 @@ function analyze(rawC, L=4){
   if(hi&&!hi.done&&c[i].close>hi.p){ev.push({k:trend===-1?'CHoCH':'BOS',d:1,p:hi.p,from:hi.i,to:i});hi.done=1;trend=1}
   if(lo&&!lo.done&&c[i].close<lo.p){ev.push({k:trend===1?'CHoCH':'BOS',d:-1,p:lo.p,from:lo.i,to:i});lo.done=1;trend=-1}}
 
- // Order blocks + Strict invalidation tracking (wick breach or 50% mean threshold mitigation)
+ // Order blocks: scan back up to 5 bars from extreme and invalidate on true candle CLOSE beyond zone
  const obs=[];
  for(const e of ev){let m=e.from;
   for(let j=e.from;j<=e.to;j++)if(e.d===1?c[j].low<c[m].low:c[j].high>c[m].high)m=j;
-  let k=m;for(let j=m;j>=Math.max(0,m-3);j--){if(e.d===1?c[j].close<c[j].open:c[j].close>c[j].open){k=j;break}}
+  let k=m;for(let j=m;j>=Math.max(0,m-5);j--){if(e.d===1?c[j].close<c[j].open:c[j].close>c[j].open){k=j;break}}
   const o={d:e.d,i:k,top:c[k].high,bot:c[k].low,mit:0,taps:0,lastTap:-1,k:e.k,to:e.to};
   for(let j=e.to+1;j<n;j++){
-   // Invalidate if candle closes beyond OB or wicks deeply through the opposite boundary
-   if(e.d===1?(c[j].close<o.bot||c[j].low<o.bot-atr*0.15):(c[j].close>o.top||c[j].high>o.top+atr*0.15)){o.mit=1;o.end=j;break}
+   if(e.d===1?c[j].close<o.bot:c[j].close>o.top){o.mit=1;o.end=j;break}
    if(e.d===1?c[j].low<=o.top:c[j].high>=o.bot){
     o.taps++;o.lastTap=j;
     const mid=(o.top+o.bot)/2;
-    if(e.d===1?(c[j].low<=mid&&c[j].close>o.top+atr*1.2):(c[j].high>=mid&&c[j].close<o.bot-atr*1.2)){o.mit=1;o.end=j;break}
+    if(e.d===1?(c[j].low<=mid&&c[j].close>o.top+atr*1.5):(c[j].high>=mid&&c[j].close<o.bot-atr*1.5)){o.mit=1;o.end=j;break}
    }
   }
-  if(o.taps>2)o.mit=1; // Stale zone if tapped more than twice
+  if(o.taps>3)o.mit=1;
   obs.push(o)}
 
- // Fair value gaps + strict invalidation when filled past 50% and reacted or broken through
+ // Fair value gaps: invalidate on candle CLOSE beyond FVG boundary or deep 50% mitigation + expansion
  const fvg=[],g=atr*0.25;
  for(let i=2;i<n;i++){
   if(c[i].low-c[i-2].high>g)fvg.push({d:1,i:i-1,top:c[i].low,bot:c[i-2].high,mit:0});
   if(c[i-2].low-c[i].high>g)fvg.push({d:-1,i:i-1,top:c[i-2].low,bot:c[i].high,mit:0})}
  for(const f of fvg)for(let j=f.i+2;j<n;j++){
   const mid=(f.top+f.bot)/2;
-  if(f.d===1?(c[j].close<f.bot||c[j].low<f.bot||(c[j].low<=mid&&c[j].close>f.top+atr*0.8)):(c[j].close>f.top||c[j].high>f.top||(c[j].high>=mid&&c[j].close<f.bot-atr*0.8))){f.mit=1;f.end=j;break}
+  if(f.d===1?(c[j].close<f.bot||(c[j].low<=mid&&c[j].close>f.top+atr)):(c[j].close>f.top||(c[j].high>=mid&&c[j].close<f.bot-atr))){f.mit=1;f.end=j;break}
  }
 
- // Liquidity: equal highs/lows + sweeps
- const liq=[];
+ // Liquidity: equal highs/lows (find all distinct pools without premature outer break)
+ const liq=[],usedPiv=new Set();
  for(const t of ['H','L']){const ps=piv.filter(p=>p.t===t&&p.st!=='broke');
-  for(let a=0;a<ps.length;a++)for(let b=a+1;b<ps.length;b++)if(Math.abs(ps[a].p-ps[b].p)<atr*0.25&&ps[b].i-ps[a].i>=3){
-   liq.push({t,p:t==='H'?Math.max(ps[a].p,ps[b].p):Math.min(ps[a].p,ps[b].p),from:ps[a].i,st:ps[b].st,at:ps[b].at});break}}
+  for(let a=0;a<ps.length;a++){if(usedPiv.has(ps[a].i))continue;
+   for(let b=a+1;b<ps.length;b++)if(Math.abs(ps[a].p-ps[b].p)<atr*0.25&&ps[b].i-ps[a].i>=3){
+    liq.push({t,p:t==='H'?Math.max(ps[a].p,ps[b].p):Math.min(ps[a].p,ps[b].p),from:ps[a].i,st:ps[b].st,at:ps[b].at});
+    usedPiv.add(ps[a].i);usedPiv.add(ps[b].i);break}}}
 
  // Filter displacement and size
  for(let k=obs.length-1;k>=0;k--){const o=obs[k];if(!(fvg.some(f=>f.d===o.d&&f.i>o.i&&f.i<=o.to)||c.slice(o.i+1,o.to+1).some(x=>(o.d===1?x.close-x.open:x.open-x.close)>=1.2*atr))||o.top-o.bot>3*atr)obs.splice(k,1)}
@@ -78,15 +93,20 @@ function analyze(rawC, L=4){
   for(let j=q.i+1;j<n;j++)if(e.d===1?c[j].low<q.p:c[j].high>q.p){to=j;swept=1;break}
   idm.push({d:e.d,p:q.p,i:q.i,to:Math.max(to,q.i+1),swept})}
 
- const lastH=[...piv].reverse().find(p=>p.t==='H'),lastL=[...piv].reverse().find(p=>p.t==='L');let hh,ll;
- if(lastH&&lastL&&lastH.p>lastL.p){hh=lastH.p;ll=lastL.p}else{const w=c.slice(-100);hh=Math.max(...w.map(x=>x.high));ll=Math.min(...w.map(x=>x.low))}
+ // Dealing Range (True structural leg range with fallback)
+ const lastEv=ev[ev.length-1],lastH=[...piv].reverse().find(p=>p.t==='H'),lastL=[...piv].reverse().find(p=>p.t==='L');let hh,ll;
+ if(lastEv){
+  const leg=c.slice(lastEv.from,n);
+  hh=Math.max(...leg.map(x=>x.high));ll=Math.min(...leg.map(x=>x.low));
+ }else if(lastH&&lastL&&lastH.p>lastL.p){hh=lastH.p;ll=lastL.p}
+ if(!hh||!ll||hh<=ll){const w=c.slice(-100);hh=Math.max(...w.map(x=>x.high));ll=Math.min(...w.map(x=>x.low))}
+
  const sweepsAll=piv.filter(p=>p.st==='sweep');
  return{atr,piv,pivRaw,ev,obs,fvg,liq,idm,trend,range:{hh,ll,eq:(hh+ll)/2},sweepsAll,sweeps:sweepsAll.slice(-5)};
 }
 
-function setup(rawC,A){
- const c=Array.isArray(rawC)&&rawC.length>2&&rawC[rawC.length-1].isClosed===false?rawC.slice(0,-1):rawC;
- if(c.length<20)return null;
+function setup(c,A){
+ if(!Array.isArray(c)||c.length<20||!A)return null;
  const lastC=c[c.length-1],last=lastC.close,d=A.trend;if(!d)return null;
  const side=z=>d===1?z.bot<last:z.top>last,pd=z=>d===1?(z.top+z.bot)/2<=A.range.eq:(z.top+z.bot)/2>=A.range.eq;
  const ob=A.obs.filter(o=>!o.mit&&o.d===d&&side(o)),fg=A.fvg.filter(f=>!f.mit&&f.d===d&&side(f));
@@ -101,10 +121,9 @@ function setup(rawC,A){
  const idmSwept=A.idm.some(id=>id.d===d&&id.swept&&id.i>=z.i);
  if(!sw&&!idmSwept&&!(z.conf&&pd(z)))return{d,none:1};
 
- // RSI Confluence Filter (Prevent buying when already overbought >68 or selling when oversold <32)
- let g=0,l=0;for(let i=c.length-14;i<c.length;i++){const df=c[i].close-c[i-1].close;df>0?g+=df:l-=df}
- const rsiVal=l===0?100:100-100/(1+g/l);
- if((d===1&&rsiVal>68)||(d===-1&&rsiVal<32))return{d,none:1};
+ // Wilder's RSI Confluence Filter (Prevent buying when already overbought >70 or selling when oversold <30)
+ const rsiVal=calcRSI(c,14);
+ if((d===1&&rsiVal>70)||(d===-1&&rsiVal<30))return{d,none:1};
 
  // Candle Rejection / Momentum Confirmation when price is near/inside the zone
  const nearZone=d===1?lastC.low<=z.top+A.atr*0.3:lastC.high>=z.bot-A.atr*0.3;
@@ -142,7 +161,6 @@ function topDown(D){
  const c15=D['15m'],A15=analyze(c15,5),e=dir?A15.ev.filter(x=>x.d===dir&&ago(c15,x.to)<=24).pop():null;
  items.push({tf:'15M',ok:!!e,label:'MSS / entry trigger',detail:e?`${e.k} ${e.d>0?'↑':'↓'} ${ago(c15,e.to)} bars ago`:'No structure shift in bias direction yet'});
  const s1h=setup(c1,A1h);
- // Block 1H setup if it goes against 1D bias
  if(s1h&&!s1h.none&&dir&&s1h.d!==dir)s1h.none=1;
  return{dir,items,score:items.filter(i=>i.ok).length,setup:s1h};
 }
@@ -199,7 +217,7 @@ function backtest(c,step=4,gen){
 }
 
 function mergeStats(l){const s=l.reduce((a,r)=>{for(const k of['setups','filled','resolved','wins','tp2','tp3','losses','sU','nU','sM','nM','strongN','strongWin'])a[k]=(a[k]||0)+r[k];return a},{});
- s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.sM/s.nM:0;return s}
+ s.exp=s.nU?s.sU/s.nU:0;s.expM=s.nM?s.nM/s.nM:0;return s}
 
 root.SMC={analyze,setup,topDown,grade,evalSaved,backtest,mergeStats,sim,simX};if(typeof module!=='undefined')module.exports=root.SMC;
 })(typeof window!=='undefined'?window:globalThis);
