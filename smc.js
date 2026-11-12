@@ -88,7 +88,6 @@ function counts(){
  n('bos',(A.ev||[]).filter(e=>e.k==='BOS').length);
 }
 
-// Fetch CLOSED candles only (prevents live-candle repainting)
 const KL='https://data-api.binance.vision/api/v3/klines';
 async function kl(sym,tf,lim,start){
  const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`+(start?`&startTime=${start}`:''));if(!r.ok)throw 0;
@@ -98,7 +97,6 @@ async function kl(sym,tf,lim,start){
  return use.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
 }
 
-// Data fetch separated from UI rendering with request-ID race protection
 async function load(sym,first){
  const myId=++reqId;
  let cData;
@@ -275,7 +273,6 @@ async function renderSV(){
 
 if(typeof Ctx!=='undefined'&&Ctx.mountBacktest)Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:null});
 
-// higher-time-frame zones on the current chart
 const TFS=['1m','5m','15m','1h','4h','1d','1w'];
 async function loadHTF(){
  const h=$('htf').value;S.htf=[];
@@ -292,7 +289,6 @@ async function loadHTF(){
 }
 $('htf').onchange=loadHTF;
 
-// coin scanner (top 30 coins by volume, scans 15m, 1h & 4h)
 $('SC').innerHTML='<h3>Coin scanner</h3><p class="msg">Scans the 30 most traded coins across 15m, 1h & 4h: top-down score and best setup grade.</p><button id="scRun" class="moreBtn">Scan top 30</button><div id="scOut"></div>';
 $('scRun').onclick=async()=>{
  const out=$('scOut');out.textContent='Loading coins...';
@@ -323,7 +319,6 @@ $('scRun').onclick=async()=>{
  }catch(e){out.textContent='Could not scan right now. Try again.'}
 };
 
-// controls
 document.querySelectorAll('#tfbar button').forEach(b=>b.onclick=()=>{S.tf=b.dataset.tf;document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x===b));load(S.sym,1)});
 document.querySelectorAll('#tools [data-l]').forEach(b=>b.onclick=()=>{S.L[b.dataset.l]^=1;b.classList.toggle('on');force()});
 const zoom=f=>{const ts=chart.timeScale(),r=ts.getVisibleLogicalRange();if(r)ts.setVisibleLogicalRange({from:r.to-(r.to-r.from)*f,to:r.to})};
@@ -352,7 +347,7 @@ if(typeof Alerts!=='undefined'){
   if(!T||T.none||!T.inside)return[];
   const td=sym===S.sym?S.td:null,G=SMC.grade(T,td);
   if(!G||G.pts<4)return[];
-  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'-'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
+  return[{m:'SMC',sig:'SMC '+T.src,dir:T.d,trade:{method:'SMC',sym,tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)},key:`SMC|${sym}|${tf}|${T.d}|${pf(T.entry)}`,title:`SMC · ${sym} ${tf}`,text:`${T.d>0?'LONG':'SHORT'}: price is inside the ${T.src} entry zone${T.conf?' (OB+FVG)':''}\nEntry ${pf(T.entry)} | SL ${pf(T.sl)}\n${(T.tps||[]).map((t,i)=>'TP'+(i+1)+' '+pf(t.p)).join(' | ')}`}];
  });
 }
 
@@ -368,8 +363,13 @@ document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||t
 renderSV();
 setInterval(renderSV,60000);
 
-// URL එකෙන් ?sym=XYZ කියවාගෙන අදාළ coin එක load කිරීම
-const urlParams = new URLSearchParams(window.location.search);
-const initSym = urlParams.get('sym') ? urlParams.get('sym').toUpperCase() : 'BTC';
-load(initSym, 1);
+const urlParams=new URLSearchParams(window.location.search);
+const initSym=urlParams.get('sym')?urlParams.get('sym').toUpperCase().replace(/USDT$/,''):'BTC';
+const initTf=urlParams.get('tf');
+if(initTf&&TFS.includes(initTf)){
+ S.tf=initTf;
+ document.querySelectorAll('#tfbar button').forEach(x=>x.classList.toggle('on',x.dataset.tf===S.tf));
+}
+if($('q')&&initSym!=='BTC')$('q').value=initSym;
+load(initSym,1);
 setInterval(()=>load(S.sym,0),20000);
