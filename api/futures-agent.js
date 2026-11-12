@@ -41,54 +41,118 @@ async function mexcReq(method, path, payload = null) {
   return data.data;
 }
 
-// Fetch Top 30 USDT Coins live metrics (prioritizing low min-notional coins for small balances)
-async function getTop30MarketData() {
-  const r = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr');
+// Cache contract details so we know exact contractSize & maxLeverage
+let contractCache = null, cacheTime = 0;
+async function getContractMap() {
+  if (contractCache && Date.now() - cacheTime < 300000) return contractCache;
+  try {
+    const r = await fetch('https://contract.mexc.com/api/v1/contract/detail');
+    const j = await r.json();
+    const map = {};
+    (j.data || []).forEach(c => {
+      map[c.symbol] = {
+        contractSize: Number(c.contractSize || 1),
+        maxLeverage: Number(c.maxLeverage || 50),
+        minVol: Number(c.minVol || 1)
+      };
+    });
+    contractCache = map;
+    cacheTime = Date.now();
+    return map;
+  } catch (e) {
+    return contractCache || {};
+  }
+}
+
+async function getMexcTickerMap() {
+  try {
+    const r = await fetch('https://contract.mexc.com/api/v1/contract/ticker');
+    const j = await r.json();
+    const map = {};
+    (j.data || []).forEach(t => {
+      map[t.symbol] = {
+        lastPrice: Number(t.lastPrice || t.fairPrice || 0),
+        fairPrice: Number(t.fairPrice || t.lastPrice || 0)
+      };
+    });
+    return map;
+  } catch (e) {
+    return {};
+  }
+}
+
+// Fetch Top 30 USDT Coins live metrics + real candle trend
+async function getTop30MarketData(maxContractUsdt) {
+  const [r, cMap] = await Promise.all([
+    fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
+    getContractMap()
+  ]);
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
+
   return all
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
     .sort((a, b) => Number(b.quoteVolume) - Number(a.quoteVolume))
-    .slice(0, 30)
+    .slice(0, 35)
     .map(t => {
+      const coin = t.symbol.replace('USDT', '');
+      const sym = `${coin}_USDT`;
       const price = Number(t.lastPrice);
       const high = Number(t.highPrice);
       const low = Number(t.lowPrice);
       const chg = Number(t.priceChangePercent);
       const posInRange = high > low ? ((price - low) / (high - low)) : 0.5;
+      const cInfo = cMap[sym] || { contractSize: 1, maxLeverage: 50 };
+      const minNotional1Contract = price * cInfo.contractSize;
+
       return {
-        coin: t.symbol.replace('USDT', ''),
+        coin,
         price,
         change24h: chg.toFixed(2) + '%',
         chgNum: chg,
         high24h: high,
         low24h: low,
         posInRange: +posInRange.toFixed(2),
+        minContractUsdt: +minNotional1Contract.toFixed(2),
+        maxLeverage: cInfo.maxLeverage,
         volumeUSDT: Math.round(Number(t.quoteVolume))
       };
-    });
+    })
+    .filter(c => c.minContractUsdt <= maxContractUsdt)
+    .slice(0, 30);
 }
 
-// Built-in Algorithmic AI Fallback if Gemini quota/model fails
-function algorithmicFallbackPick(marketList) {
-  // Filter out BTC/ETH if margin is small; pick strong momentum coin
-  const tradable = marketList.filter(c => !['BTC', 'ETH'].includes(c.coin) && c.price < 500);
-  const pool = tradable.length ? tradable : marketList;
+// Compute Smart Auto-Leverage based on Margin USDT, Stop-Loss distance & Contract Min Notional
+function calcAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
+  // Minimum leverage required so that (marginUsdt * lev) >= minContractUsdt * 1.05
+  const minLevForContract = Math.ceil((minContractUsdt * 1.08) / Math.max(0.5, marginUsdt));
 
-  let best = pool[0], bestScore = -1;
-  for (const c of pool) {
+  // Volatility-based safe leverage based on SL % distance (aiming ~20-30% margin risk at SL)
+  const slPct = Math.abs(entry - sl) / (entry || 1);
+  let targetLev = slPct > 0 ? Math.round(0.25 / slPct) : 15;
+
+  // For small margin ($1 - $3), boost leverage slightly so position size is meaningful
+  if (marginUsdt <= 1.5) targetLev = Math.max(targetLev, 15);
+  else if (marginUsdt <= 3) targetLev = Math.max(targetLev, 12);
+
+  const finalLev = Math.max(minLevForContract, Math.min(maxLev, Math.max(5, targetLev)));
+  return Math.min(50, finalLev);
+}
+
+function algorithmicFallbackPick(marketList) {
+  let best = marketList[0], bestScore = -1;
+  for (const c of marketList) {
     const absChg = Math.abs(c.chgNum);
-    // Favor healthy momentum (1.5% to 12% 24h move) with clear directional strength
-    const momScore = absChg >= 1.5 && absChg <= 12 ? absChg * 2 : absChg * 0.5;
-    const dirBonus = (c.chgNum > 0 && c.posInRange > 0.6) || (c.chgNum < 0 && c.posInRange < 0.4) ? 10 : 0;
+    const momScore = absChg >= 1.5 && absChg <= 14 ? absChg * 2 : absChg * 0.5;
+    const dirBonus = (c.chgNum > 0 && c.posInRange > 0.62) || (c.chgNum < 0 && c.posInRange < 0.38) ? 12 : 0;
     const score = momScore + dirBonus;
     if (score > bestScore) { bestScore = score; best = c; }
   }
 
   const isLong = best.chgNum >= 0;
   const p = best.price;
-  const riskPct = 0.015; // 1.5% SL distance
-  const rewardPct = 0.035; // 3.5% TP distance (1:2.33 RR)
+  const riskPct = 0.015;
+  const rewardPct = 0.035;
   const dec = p >= 100 ? 2 : p >= 1 ? 4 : 5;
 
   return {
@@ -97,40 +161,33 @@ function algorithmicFallbackPick(marketList) {
     entry: +p.toFixed(dec),
     sl: +(isLong ? p * (1 - riskPct) : p * (1 + riskPct)).toFixed(dec),
     tp: +(isLong ? p * (1 + rewardPct) : p * (1 - rewardPct)).toFixed(dec),
-    confidence: 82,
-    reason: `Strong ${isLong ? 'bullish' : 'bearish'} momentum (${best.change24h}) with high liquidity and 1:2.3 Risk-Reward target.`
+    confidence: 85,
+    reason: `Strong ${isLong ? 'bullish' : 'bearish'} trend (${best.change24h}) with high volume and 1:2.3 Risk-to-Reward target.`
   };
 }
 
-// Dynamically discover available Gemini models & ask Gemini AI
-async function pickBestCoinWithGemini(marketList, timeframe, notionalUsdt) {
+async function pickBestCoinWithGemini(marketList, timeframe) {
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
-  if (!geminiKey) return algorithmicFallbackPick(marketList);
-
-  // Filter coins whose single contract is affordable for small notional sizes (< $25)
-  const candidates = notionalUsdt < 25
-    ? marketList.filter(c => !['BTC', 'ETH'].includes(c.coin))
-    : marketList;
+  if (!geminiKey || !marketList.length) return algorithmicFallbackPick(marketList);
 
   const prompt = `You are an elite Crypto Futures AI Trading Agent.
-Analyze these live Top USDT coins (${timeframe} timeframe):
-${JSON.stringify(candidates.map(({ chgNum, ...rest }) => rest))}
+Analyze these live USDT coins (${timeframe} timeframe) that fit the user's margin size:
+${JSON.stringify(marketList.map(({ chgNum, maxLeverage, ...rest }) => rest))}
 
-Select the SINGLE BEST coin with the strongest momentum, liquidity, and cleanest Risk-to-Reward setup right now for a MEXC USDT-M Futures trade (LONG or SHORT).
-Calculate exact Entry, Stop-Loss (SL ~1.5% away), and Take-Profit (TP ~3.5% away) prices.
+Select the SINGLE BEST coin with the strongest trend momentum, liquidity, and cleanest Risk-to-Reward setup right now for a MEXC USDT-M Futures trade (LONG or SHORT).
+Calculate exact Entry, Stop-Loss (SL ~1.4% to 2% away), and Take-Profit (TP ~3% to 4.5% away) prices.
 
 Respond ONLY with a raw JSON object:
 {
-  "coin": "SOL",
+  "coin": "XRP",
   "direction": "LONG",
   "entry": 0.0,
   "sl": 0.0,
   "tp": 0.0,
-  "confidence": 85,
+  "confidence": 88,
   "reason": "Clear 2-sentence explanation of why this coin was chosen and its profit target."
 }`;
 
-  // 1. Auto-detect supported generateContent models from Google API
   let models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
   try {
     const lr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
@@ -140,9 +197,8 @@ Respond ONLY with a raw JSON object:
         .filter(m => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(m.name) && !/vision|embedding|imagen|aqa|tts|audio/i.test(m.name))
         .map(m => m.name.replace(/^models\//, ''));
       if (found.length) {
-        // Prioritize flash models first
         found.sort((a, b) => (/flash/i.test(b) ? 1 : 0) - (/flash/i.test(a) ? 1 : 0));
-        models = found.slice(0, 5);
+        models = found.slice(0, 4);
       }
     }
   } catch (e) {}
@@ -169,26 +225,28 @@ Respond ONLY with a raw JSON object:
       if (!match) continue;
 
       const parsed = JSON.parse(match[0]);
-      if (parsed.coin && parsed.direction && parsed.entry) {
-        return parsed;
-      }
+      if (parsed.coin && parsed.direction && parsed.entry) return parsed;
     } catch (e) {}
   }
 
-  // Fallback to built-in algorithmic AI if Gemini API key has model/quota restrictions
-  return algorithmicFallbackPick(candidates);
+  return algorithmicFallbackPick(marketList);
 }
 
-// Get contract size & execute MEXC Futures Order
-async function openFuturesPosition(pick, marginUsdt, leverage) {
+async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) {
   const cleanCoin = pick.coin.toUpperCase().replace(/USDT$/, '').replace(/[^A-Z0-9]/g, '');
   const symbol = `${cleanCoin}_USDT`;
   const detail = await mexcReq('GET', '/api/v1/contract/detail', { symbol });
   const contractSize = Number(detail.contractSize || 1);
+  const maxLev = Number(detail.maxLeverage || 50);
   const price = Number(pick.entry);
+  const minContractUsdt = price * contractSize;
+
+  const leverage = autoLeverage
+    ? calcAutoLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), maxLev)
+    : Math.min(maxLev, Math.max(1, reqLeverage));
 
   const notional = marginUsdt * leverage;
-  const vol = Math.max(1, Math.floor(notional / (price * contractSize)));
+  const vol = Math.max(1, Math.floor(notional / minContractUsdt));
   const side = pick.direction.toUpperCase() === 'LONG' ? 1 : 3;
 
   const orderPayload = {
@@ -204,7 +262,7 @@ async function openFuturesPosition(pick, marginUsdt, leverage) {
   };
 
   const orderId = await mexcReq('POST', '/api/v1/private/order/submit', orderPayload);
-  return { orderId, symbol, vol, contractSize, notional };
+  return { orderId, symbol, vol, leverage, contractSize, notional: +(vol * minContractUsdt).toFixed(2) };
 }
 
 module.exports = async (req, res) => {
@@ -218,52 +276,80 @@ module.exports = async (req, res) => {
 
     const action = body.action || 'status';
 
+    // 1. Live Status + Real-time Calculated Unrealized PnL ($ and %)
     if (action === 'status') {
-      const [positions, assets] = await Promise.all([
+      const [positions, assets, tickers, cMap] = await Promise.all([
         mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
-        mexcReq('GET', '/api/v1/private/account/assets').catch(() => [])
+        mexcReq('GET', '/api/v1/private/account/assets').catch(() => []),
+        getMexcTickerMap(),
+        getContractMap()
       ]);
       const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 0, equity: 0 };
 
+      let totalUnrealized = 0;
       const formatted = (positions || []).map(p => {
         const isLong = p.positionType === 1;
-        const entry = Number(p.openAvgPrice);
-        const holdVol = Number(p.holdVol);
-        const im = Number(p.im || 1);
-        const unrealizedPnl = Number(p.unrealisedPnl || 0);
-        const roePct = im > 0 ? ((unrealizedPnl / im) * 100).toFixed(2) : '0.00';
+        const entry = Number(p.openAvgPrice || p.holdAvgPrice || 0);
+        const holdVol = Number(p.holdVol || 0);
+        const im = Number(p.im || p.oim || 1);
+        const cSize = cMap[p.symbol]?.contractSize || 1;
+        const liveMark = tickers[p.symbol]?.lastPrice || entry;
+
+        // Calculate exact real-time PnL from live price if MEXC omits unrealisedPnl
+        const rawPnl = p.unrealisedPnl != null
+          ? Number(p.unrealisedPnl)
+          : (isLong ? (liveMark - entry) : (entry - liveMark)) * holdVol * cSize;
+
+        totalUnrealized += rawPnl;
+        const roePct = im > 0 ? ((rawPnl / im) * 100).toFixed(2) : '0.00';
 
         return {
           positionId: p.positionId,
           symbol: p.symbol,
+          coin: p.symbol.replace('_USDT', ''),
           direction: isLong ? 'LONG' : 'SHORT',
           leverage: p.leverage,
           entryPrice: entry,
+          markPrice: liveMark,
           holdVol,
           margin: im.toFixed(2),
-          pnl: unrealizedPnl.toFixed(2),
+          pnl: rawPnl.toFixed(3),
           roe: roePct,
+          liquidatePrice: p.liquidatePrice || 0,
           openTime: p.createTime
         };
       });
 
+      const avail = Number(usdtAsset.availableBalance || 0);
+      const eq = Number(usdtAsset.equity || avail) + totalUnrealized;
+
       return res.status(200).json({
         ok: true,
-        balance: Number(usdtAsset.availableBalance || 0).toFixed(2),
-        equity: Number(usdtAsset.equity || 0).toFixed(2),
+        balance: avail.toFixed(2),
+        equity: eq.toFixed(2),
+        totalPnl: totalUnrealized.toFixed(3),
         positions: formatted
       });
     }
 
+    // 2. Scan Top 30 -> Auto-adjust Leverage for Margin ($0.50 / $1+) -> Execute Trade
     if (action === 'scan_and_trade') {
-      const marginUsdt = Math.max(1, Number(body.marginUsdt) || 1.5);
-      const leverage = Math.min(50, Math.max(1, Number(body.leverage) || 10));
+      const marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 1);
+      const reqLeverage = Math.min(50, Math.max(1, Number(body.leverage) || 10));
+      const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
-      const notionalUsdt = marginUsdt * leverage;
 
-      const top30 = await getTop30MarketData();
-      const pick = await pickBestCoinWithGemini(top30, timeframe, notionalUsdt);
-      const exec = await openFuturesPosition(pick, marginUsdt, leverage);
+      // Max 1-contract value allowed so even $1 margin can open at least 1 contract
+      const maxLookupLev = autoLeverage ? 40 : reqLeverage;
+      const maxContractUsdt = marginUsdt * maxLookupLev;
+
+      const top30 = await getTop30MarketData(maxContractUsdt);
+      if (!top30.length) {
+        throw new Error(`Margin $${marginUsdt} is too small for current leverage. Enable Auto-Leverage or use at least $1 USDT.`);
+      }
+
+      const pick = await pickBestCoinWithGemini(top30, timeframe);
+      const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
 
       return res.status(200).json({
         ok: true,
@@ -273,6 +359,7 @@ module.exports = async (req, res) => {
       });
     }
 
+    // 3. Close Position
     if (action === 'close') {
       const { symbol, positionId, direction, vol } = body;
       const closeSide = direction === 'LONG' ? 4 : 2;
