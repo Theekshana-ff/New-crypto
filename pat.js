@@ -184,6 +184,7 @@ if(typeof Alerts!=='undefined'){
  });
 }
 
+// Fixed: tf:()=>S.tf (function) instead of tf:S.tf
 if(typeof Ctx!=='undefined'&&Ctx.mountBacktest){
  Ctx.mountBacktest($('BT'),{sym:()=>S.sym,tf:()=>S.tf,gen:(sl,A)=>{const p=PAT.detect(sl,A).find(x=>x.dir&&x.tps&&!/breakout|breakdown/.test(x.status));return p?{d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps,key:p.id,conf:false,brk:p.brk}:null}});
 }
