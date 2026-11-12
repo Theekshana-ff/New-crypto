@@ -1,17 +1,49 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Validated & SMC signals</title><link rel="stylesheet" href="style.css"></head>
+<title>Validated &amp; Multi-Method Signals</title><link rel="stylesheet" href="style.css"></head>
 <body>
-<header class="top"><div class="row"><button id="menuBtn" aria-label="Menu">&#9776;</button><b>✅ Validated & SMC signals</b><div class="clock"><div id="time"></div><div id="date"></div></div></div></header>
+<header class="top"><div class="row"><button id="menuBtn" aria-label="Menu">&#9776;</button><b>✅ Validated &amp; Multi-Method Signals</b><div class="clock"><div id="time"></div><div id="date"></div></div></div></header>
 <div id="scrim"></div>
 <nav id="drawer"><h3>Menu</h3><a href="index.html">Home</a><a href="signals.html">Validated signals</a><a href="smc.html">SMC</a><a href="fibonacci.html">Fibonacci</a><a href="patterns.html">Chart patterns</a><a href="journal.html">Trade journal</a><a href="risk.html">Risk calculator</a><a href="links.html">Other websites</a></nav>
 <main>
+ <section class="card" id="TR" style="margin-bottom:12px">
+  <h3>🔥 Trending Method &amp; Market Pulse</h3>
+  <p class="msg">Tap <b>"Scan Top 30 Coins"</b> below to analyze the live market across <b>SMC</b>, <b>Fibonacci</b>, and <b>Chart Patterns</b> to see which method is working best right now.</p>
+ </section>
+
+ <section class="card" id="LV" style="margin-bottom:12px">
+  <h3>🎯 Live Multi-Method Scanner (SMC + Fibonacci + Patterns)</h3>
+  <div class="tools tfbar inline" style="margin:8px 0">
+   <button data-m="ALL" class="mflt on">All Methods</button>
+   <button data-m="SMC" class="mflt">SMC</button>
+   <button data-m="FIB" class="mflt">Fibonacci</button>
+   <button data-m="PAT" class="mflt">Patterns</button>
+   <button data-m="STRAT" class="mflt">Strategy Rules</button>
+   <select id="stf">
+    <option value="all" selected>Timeframes: 15m + 1h + 4h</option>
+    <option value="15m">15m only</option>
+    <option value="1h">1h only</option>
+    <option value="4h">4h only</option>
+   </select>
+   <select id="sstat">
+    <option value="all" selected>Show: In-Zone + Near Entry</option>
+    <option value="zone">🔥 In Entry Zone / Breakout Only</option>
+   </select>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0">
+   <button id="scan30" class="moreBtn" style="background:#f0b429;color:#0e1621;font-weight:700">🔥 Scan Top 30 Coins (Auto)</button>
+   <button id="scanCustom" class="moreBtn">Scan typed coins</button>
+   <input id="coins" value="BTC,ETH,SOL,BNB,XRP,LINK,ADA,DOGE,AVAX,SUI" placeholder="Custom coins (BTC,ETH...)" style="flex:1;min-width:180px">
+  </div>
+  <div id="out"></div>
+ </section>
+
  <section class="card" id="ST"><h3>Signal rules that passed real-data tests</h3><p class="msg">Loading...</p></section>
- <section class="card" id="LV" style="margin-top:12px"><h3>Live signals (SMC + Strategy)</h3>
-  <div class="rin"><label>Coins (comma separated)<input id="coins" value="BTC,ETH,SOL,BNB,XRP,LINK"></label></div>
-  <button id="scan" class="moreBtn">Scan now</button><div id="out"></div></section>
 </main>
 <script src="smc-core.js"></script>
+<script src="fib-core.js"></script>
+<script src="pat-core.js"></script>
 <script src="strat-core.js"></script>
+<script src="ctx.js"></script>
 <script src="signals.js"></script>
 </body></html>
