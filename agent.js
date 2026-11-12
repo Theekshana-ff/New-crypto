@@ -16,7 +16,6 @@ const tg = o => { if ($('drawer')) $('drawer').classList.toggle('open', o); if (
 if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
-// Load saved settings
 const savedCfg = ls.get('mexcAgentCfg', { sec: '', margin: 10, lev: 10, tf: '15m' });
 $('sec').value = savedCfg.sec || '';
 $('margin').value = savedCfg.margin || 10;
@@ -48,7 +47,6 @@ function renderLogs() {
     </tr>`).join('') + '</table>';
 }
 
-// Fetch Live MEXC Futures Balance & Open Positions (PnL)
 async function refreshStatus() {
   const secret = $('sec').value.trim();
   if (!secret) return;
@@ -81,10 +79,34 @@ async function refreshStatus() {
               <td class="${isProfit ? 'up' : 'down'}" style="font-size:1.05em">
                 <b>${isProfit ? '+' : ''}$${p.pnl} USDT (${isProfit ? '+' : ''}${p.roe}%)</b>
               </td>
-              <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" style="margin:0;padding:4px 8px">Close</button></td>
+              <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" data-vol="${p.holdVol}" style="margin:0;padding:4px 8px">Close</button></td>
             </tr>`;
           }).join('')}
         </table>`;
+
+      document.querySelectorAll('.closeBtn').forEach(btn => btn.onclick = async () => {
+        if (!confirm(`Close ${btn.dataset.sym} ${btn.dataset.dir} position at market price?`)) return;
+        btn.disabled = true; btn.textContent = 'Closing...';
+        try {
+          const cr = await fetch('/api/futures-agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              action: 'close',
+              secret: $('sec').value.trim(),
+              symbol: btn.dataset.sym,
+              positionId: btn.dataset.id,
+              direction: btn.dataset.dir,
+              vol: btn.dataset.vol
+            })
+          });
+          const cd = await cr.json();
+          if (!cr.ok || cd.error) alert('Close error: ' + (cd.error || 'Failed'));
+          else await refreshStatus();
+        } catch (err) {
+          alert('Network error closing position');
+        }
+      });
     }
     $('statusMsg').innerHTML = `<span class="up">✓ Connected to MEXC Futures Live (${new Date().toLocaleTimeString()})</span>`;
   } catch (e) {
@@ -92,7 +114,6 @@ async function refreshStatus() {
   }
 }
 
-// Scan Top 30 Coins & Execute Best Trade via Gemini AI
 async function runAgentTrade() {
   const secret = $('sec').value.trim();
   if (!secret) { alert('Please enter your Agent Password first!'); return; }
@@ -150,7 +171,7 @@ $('autoToggleBtn').onclick = () => {
   $('autoToggleBtn').style.background = autoPilot ? '#2ecc9a' : '#f0b429';
   if (autoPilot) {
     runAgentTrade();
-    autoTimer = setInterval(runAgentTrade, 15 * 60 * 1000); // Scans & trades every 15 mins
+    autoTimer = setInterval(runAgentTrade, 15 * 60 * 1000);
   } else {
     clearInterval(autoTimer);
   }
@@ -158,4 +179,4 @@ $('autoToggleBtn').onclick = () => {
 
 renderLogs();
 refreshStatus();
-setInterval(refreshStatus, 10000); // Live PnL updates every 10 seconds
+setInterval(refreshStatus, 10000);
