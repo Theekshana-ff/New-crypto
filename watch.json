@@ -5,7 +5,16 @@
     "SOL",
     "BNB",
     "XRP",
-    "LINK"
+    "LINK",
+    "ADA",
+    "DOGE",
+    "AVAX",
+    "SUI",
+    "NEAR",
+    "PEPE",
+    "UNI",
+    "TRX",
+    "DOT"
   ],
   "timeframes": [
     "15m",
@@ -13,14 +22,17 @@
     "4h"
   ],
   "methods": [
+    "SMC",
+    "FIB",
+    "PAT",
     "strategy"
   ],
   "filters": {
     "news": true,
-    "btc": false,
+    "btc": true,
     "range": false,
     "funding": false,
-    "htf": false
+    "htf": true
   },
   "cooldownHours": 6
 }
