@@ -16,19 +16,123 @@ const tg = o => { if ($('drawer')) $('drawer').classList.toggle('open', o); if (
 if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
-const savedCfg = ls.get('mexcAgentCfg', { sec: '', margin: 10, lev: 10, tf: '15m' });
+const savedCfg = ls.get('mexcAgentCfg', { sec: '', margin: 1, autoLev: 'auto', lev: 15, tf: '15m' });
 $('sec').value = savedCfg.sec || '';
-$('margin').value = savedCfg.margin || 10;
-$('lev').value = savedCfg.lev || 10;
+$('margin').value = savedCfg.margin != null ? savedCfg.margin : 1;
+$('autoLev').value = savedCfg.autoLev || 'auto';
+$('lev').value = savedCfg.lev || 15;
 $('tf').value = savedCfg.tf || '15m';
 
-const saveCfg = () => ls.set('mexcAgentCfg', {
-  sec: $('sec').value.trim(),
-  margin: +$('margin').value || 10,
-  lev: +$('lev').value || 10,
-  tf: $('tf').value
-});
-['sec', 'margin', 'lev', 'tf'].forEach(id => $(id).onchange = saveCfg);
+function toggleLevInput() {
+  $('lev').disabled = $('autoLev').value === 'auto';
+  $('lev').style.opacity = $('autoLev').value === 'auto' ? '0.5' : '1';
+}
+toggleLevInput();
+
+const saveCfg = () => {
+  toggleLevInput();
+  ls.set('mexcAgentCfg', {
+    sec: $('sec').value.trim(),
+    margin: +$('margin').value || 1,
+    autoLev: $('autoLev').value,
+    lev: +$('lev').value || 15,
+    tf: $('tf').value
+  });
+};
+['sec', 'margin', 'autoLev', 'lev', 'tf'].forEach(id => $(id).onchange = saveCfg);
+
+// --- LIVE TREND CHART (Lightweight Charts) ---
+let chart, candleSeries, ema20Series, ema50Series, priceLines = [];
+let currentChartCoin = 'BTC', currentLevels = null;
+
+function initChart() {
+  const box = $('agentChart');
+  if (!box || !window.LightweightCharts) return;
+  chart = LightweightCharts.createChart(box, {
+    width: box.clientWidth,
+    height: 360,
+    layout: { background: { color: '#0e1621' }, textColor: '#d7e3f4' },
+    grid: { vertLines: { color: '#1b2838' }, horzLines: { color: '#1b2838' } },
+    timeScale: { timeVisible: true, secondsVisible: false }
+  });
+  candleSeries = chart.addCandlestickSeries({
+    upColor: '#2ecc9a', downColor: '#ff5d5d', borderVisible: false, wickUpColor: '#2ecc9a', wickDownColor: '#ff5d5d'
+  });
+  ema20Series = chart.addLineSeries({ color: '#38bdf8', lineWidth: 2, title: 'EMA 20' });
+  ema50Series = chart.addLineSeries({ color: '#f0b429', lineWidth: 2, title: 'EMA 50' });
+
+  window.addEventListener('resize', () => chart && chart.applyOptions({ width: box.clientWidth }));
+}
+
+function calcEMA(candles, period) {
+  const k = 2 / (period + 1);
+  let ema = candles[0].close;
+  return candles.map(c => {
+    ema = c.close * k + ema * (1 - k);
+    return { time: c.time, value: ema };
+  });
+}
+
+async function loadChartCoin(coin, levels = null) {
+  if (!chart) initChart();
+  if (!chart) return;
+  currentChartCoin = coin || currentChartCoin;
+  if (levels) currentLevels = levels;
+  const tf = $('tf').value || '15m';
+
+  try {
+    const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${currentChartCoin}USDT&interval=${tf}&limit=200`);
+    if (!r.ok) return;
+    const raw = await r.json();
+    const candles = raw.map(x => ({
+      time: Math.floor(x[0] / 1000), open: +x[1], high: +x[2], low: +x[3], close: +x[4]
+    }));
+    if (!candles.length) return;
+
+    candleSeries.setData(candles);
+    const e20 = calcEMA(candles, 20);
+    const e50 = calcEMA(candles, 50);
+    ema20Series.setData(e20);
+    ema50Series.setData(e50);
+
+    // Detect live trend on chart
+    const last = candles[candles.length - 1].close;
+    const v20 = e20[e20.length - 1].value;
+    const v50 = e50[e50.length - 1].value;
+    const isBull = v20 > v50 && last >= v20;
+    const isBear = v20 < v50 && last <= v20;
+
+    $('chartHeader').textContent = `📈 Live AI Trend & Position Chart (${currentChartCoin}/USDT · ${tf})`;
+    if (isBull) {
+      $('trendBadge').innerHTML = `<span class="tag up">🔥 LIVE TREND: STRONG BULLISH (UPTREND)</span>`;
+    } else if (isBear) {
+      $('trendBadge').innerHTML = `<span class="tag down">🔥 LIVE TREND: STRONG BEARISH (DOWNTREND)</span>`;
+    } else {
+      $('trendBadge').innerHTML = `<span class="tag">⚖️ LIVE TREND: CONSOLIDATING / RANGING</span>`;
+    }
+
+    // Draw Entry / SL / TP lines if available
+    priceLines.forEach(l => candleSeries.removePriceLine(l));
+    priceLines = [];
+    if (currentLevels && currentLevels.coin === currentChartCoin) {
+      if (currentLevels.entry) {
+        priceLines.push(candleSeries.createPriceLine({
+          price: +currentLevels.entry, color: '#38bdf8', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: `ENTRY (${currentLevels.direction})`
+        }));
+      }
+      if (currentLevels.sl) {
+        priceLines.push(candleSeries.createPriceLine({
+          price: +currentLevels.sl, color: '#ff5d5d', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'STOP LOSS'
+        }));
+      }
+      if (currentLevels.tp) {
+        priceLines.push(candleSeries.createPriceLine({
+          price: +currentLevels.tp, color: '#2ecc9a', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'TAKE PROFIT'
+        }));
+      }
+    }
+  } catch (e) {}
+}
 
 let autoPilot = false, autoTimer = null;
 
@@ -38,7 +142,7 @@ function renderLogs() {
     $('logList').innerHTML = '<p class="msg">No trades executed by AI Agent yet.</p>';
     return;
   }
-  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Side</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
+  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Auto-Lev</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
     logs.map(l => `<tr>
       <td><small>${new Date(l.time).toLocaleString()}</small></td>
       <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span><br><small>Margin: $${l.margin}</small></td>
@@ -60,29 +164,53 @@ async function refreshStatus() {
       return;
     }
 
+    const totPnl = Number(d.totalPnl || 0);
     $('BAL').innerHTML = `<h3>💼 MEXC Futures Account</h3>
-      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Total Equity: <b>$${d.equity}</b> &nbsp;|&nbsp; Open Positions: <b>${d.positions.length}</b></p>`;
+      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Total Equity: <b>$${d.equity}</b> &nbsp;|&nbsp; Total Unrealized PnL: <b class="${totPnl >= 0 ? 'up' : 'down'}">${totPnl >= 0 ? '+' : ''}$${d.totalPnl} USDT</b> &nbsp;|&nbsp; Open Positions: <b>${d.positions.length}</b></p>`;
 
     if (!d.positions.length) {
-      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Profit / Loss)</h3><p class="msg">No open Futures positions right now.</p>`;
+      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3><p class="msg">No open Futures positions right now.</p>`;
     } else {
-      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Profit / Loss)</h3>
+      const logs = ls.get('mexcAgentLogs', []);
+      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3>
         <table>
-          <tr><th>Contract</th><th>Side / Lev</th><th>Entry Price</th><th>Margin</th><th>Live Profit / Loss</th><th>Action</th></tr>
+          <tr><th>Contract</th><th>Side / Lev</th><th>Entry vs Live Price</th><th>Margin</th><th>Live Profit / Loss</th><th>Action</th></tr>
           ${d.positions.map(p => {
             const isProfit = Number(p.pnl) >= 0;
             return `<tr>
-              <td><b>${p.symbol}</b><br><small class="msg">${new Date(p.openTime).toLocaleTimeString()}</small></td>
+              <td><b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" data-entry="${p.entryPrice}" data-dir="${p.direction}" style="color:#38bdf8">${p.symbol} 📈</a></b><br><small class="msg">${new Date(p.openTime).toLocaleTimeString()}</small></td>
               <td><span class="tag ${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction}</span> <b>${p.leverage}x</b></td>
-              <td>${p.entryPrice}</td>
+              <td>Entry: <b>${p.entryPrice}</b><br>Live: <b>${p.markPrice}</b></td>
               <td>$${p.margin}</td>
-              <td class="${isProfit ? 'up' : 'down'}" style="font-size:1.05em">
+              <td class="${isProfit ? 'up' : 'down'}" style="font-size:1.1em">
                 <b>${isProfit ? '+' : ''}$${p.pnl} USDT (${isProfit ? '+' : ''}${p.roe}%)</b>
               </td>
               <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" data-vol="${p.holdVol}" style="margin:0;padding:4px 8px">Close</button></td>
             </tr>`;
           }).join('')}
         </table>`;
+
+      // Automatically sync Live Chart to active open position if not set
+      const activePos = d.positions[0];
+      const matchLog = logs.find(l => l.coin === activePos.coin);
+      loadChartCoin(activePos.coin, {
+        coin: activePos.coin,
+        direction: activePos.direction,
+        entry: activePos.entryPrice,
+        sl: matchLog?.sl,
+        tp: matchLog?.tp
+      });
+
+      document.querySelectorAll('.chartCoinLink').forEach(a => a.onclick = () => {
+        const mLog = logs.find(l => l.coin === a.dataset.coin);
+        loadChartCoin(a.dataset.coin, {
+          coin: a.dataset.coin,
+          direction: a.dataset.dir,
+          entry: a.dataset.entry,
+          sl: mLog?.sl,
+          tp: mLog?.tp
+        });
+      });
 
       document.querySelectorAll('.closeBtn').forEach(btn => btn.onclick = async () => {
         if (!confirm(`Close ${btn.dataset.sym} ${btn.dataset.dir} position at market price?`)) return;
@@ -108,7 +236,7 @@ async function refreshStatus() {
         }
       });
     }
-    $('statusMsg').innerHTML = `<span class="up">✓ Connected to MEXC Futures Live (${new Date().toLocaleTimeString()})</span>`;
+    $('statusMsg').innerHTML = `<span class="up">✓ Live PnL &amp; Trend Updated (${new Date().toLocaleTimeString()})</span>`;
   } catch (e) {
     $('statusMsg').innerHTML = `<span class="down">⚠ Network error checking MEXC status.</span>`;
   }
@@ -119,8 +247,11 @@ async function runAgentTrade() {
   if (!secret) { alert('Please enter your Agent Password first!'); return; }
   saveCfg();
 
+  const marginVal = Math.max(0.5, +$('margin').value || 1);
+  const isAutoLev = $('autoLev').value === 'auto';
+
   $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = '🤖 <b>Scanning Top 30 Coins &amp; Consulting Gemini AI...</b>';
+  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins for $${marginVal} USDT (${isAutoLev ? 'Auto-Leverage' : $('lev').value + 'x'})...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -129,8 +260,9 @@ async function runAgentTrade() {
       body: JSON.stringify({
         action: 'scan_and_trade',
         secret,
-        marginUsdt: +$('margin').value || 10,
-        leverage: +$('lev').value || 10,
+        marginUsdt: marginVal,
+        autoLeverage: isAutoLev,
+        leverage: +$('lev').value || 15,
         timeframe: $('tf').value
       })
     });
@@ -138,13 +270,14 @@ async function runAgentTrade() {
     if (!r.ok || d.error) {
       $('statusMsg').innerHTML = `<span class="down">❌ Error: ${d.error}</span>`;
     } else {
+      const usedLev = d.exec.leverage || +$('lev').value || 15;
       const logs = ls.get('mexcAgentLogs', []);
       logs.unshift({
         time: Date.now(),
         coin: d.pick.coin,
         direction: d.pick.direction,
-        leverage: +$('lev').value || 10,
-        margin: +$('margin').value || 10,
+        leverage: usedLev,
+        margin: marginVal,
         entry: d.pick.entry,
         sl: d.pick.sl,
         tp: d.pick.tp,
@@ -153,7 +286,8 @@ async function runAgentTrade() {
       });
       ls.set('mexcAgentLogs', logs.slice(0, 50));
       renderLogs();
-      $('statusMsg').innerHTML = `<span class="up">✅ AI Executed ${d.pick.direction} on ${d.pick.coin}_USDT!</span>`;
+      loadChartCoin(d.pick.coin, d.pick);
+      $('statusMsg').innerHTML = `<span class="up">✅ AI Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x Auto-Leverage)!</span>`;
       await refreshStatus();
     }
   } catch (e) {
@@ -177,6 +311,8 @@ $('autoToggleBtn').onclick = () => {
   }
 };
 
+initChart();
 renderLogs();
+loadChartCoin('UNI');
 refreshStatus();
-setInterval(refreshStatus, 10000);
+setInterval(refreshStatus, 5000); // Live PnL & Chart updates every 5 seconds
