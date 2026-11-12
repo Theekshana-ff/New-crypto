@@ -1,107 +1,279 @@
-const $=id=>document.getElementById(id),pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
-setInterval(function t(){const d=new Date();if($('time'))$('time').textContent=d.toLocaleTimeString();if($('date'))$('date').textContent=d.toLocaleDateString('en',{weekday:'short',year:'numeric',month:'short',day:'numeric'});return t}(),1000);
+// File: signals.js
+const $=id=>document.getElementById(id);
+const pf=p=>p>=100?p.toFixed(2):p>=1?p.toFixed(4):p.toPrecision(5);
+const pp=(p,r)=>((Math.abs(p-r)/r)*100).toFixed(2)+'%';
+const cdn=s=>`https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/32/color/${s.toLowerCase()}.png`;
+function fb(el,s){if(!el.dataset.f){el.dataset.f=1;el.src=cdn(s)}else el.outerHTML=`<i class="lg">${s[0]}</i>`}
+const logo=s=>{s=String(s).replace(/[^A-Za-z0-9]/g,'');return `<img class="lgo" src="${cdn(s)}" alt="" onerror="fb(this,'${s}')">`};
+const GC={'A+':'#f0b429',A:'#2ecc9a',B:'#4ea1ff',C:'#8a9bb0'};
+const MPAGE={SMC:'smc.html',FIB:'fibonacci.html',PAT:'patterns.html',STRAT:'signals.html'};
+
+setInterval(function t(){
+ const d=new Date();
+ if($('time'))$('time').textContent=d.toLocaleTimeString();
+ if($('date'))$('date').textContent=d.toLocaleDateString('en',{weekday:'short',year:'numeric',month:'short',day:'numeric'});
+ return t;
+}(),1000);
+
 const tg=o=>{if($('drawer'))$('drawer').classList.toggle('open',o);if($('scrim'))$('scrim').classList.toggle('show',o)};
 if($('menuBtn'))$('menuBtn').onclick=()=>tg(1);
 if($('scrim'))$('scrim').onclick=()=>tg(0);
 
-const TFMS={'15m':9e5,'1h':36e5,'4h':144e5,'1d':864e5};
-let ST={enabled:[]};
-
-// Fallback high-probability rules if strategy.json is empty or missing
-const DEFAULT_RULES=[
- {name:'Structure EMA20 Bounce + Volume',tf:'1h',cfg:{s:'structure',k:1.5,m:2},stats:{trades:'Live',hitRate:0.65,expTrain:0.42,expValidation:0.36,expTest:0.32}},
- {name:'Trend Pullback (RSI 40 + Rejection)',tf:'1h',cfg:{s:'pull',lvl:40,k:1.5,m:2},stats:{trades:'Live',hitRate:0.62,expTrain:0.35,expValidation:0.30,expTest:0.28}},
- {name:'Volume Breakout (20-bar + ADX)',tf:'15m',cfg:{s:'brk',n:20,f:1,k:1.5,m:2.5},stats:{trades:'Live',hitRate:0.58,expTrain:0.45,expValidation:0.38,expTest:0.31}},
- {name:'EMA 9-21 Cross + Volume Trend',tf:'4h',cfg:{s:'ema',fs:'9-21',k:1.5,m:2},stats:{trades:'Live',hitRate:0.60,expTrain:0.38,expValidation:0.33,expTest:0.29}}
-];
-
-async function fetchKlines(sym,tf,limit=500){
- try{
-  const r=await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${sym}USDT&interval=${tf}&limit=${limit}`);
-  if(!r.ok)return null;
-  return(await r.json()).filter(x=>x[6]<=Date.now()).map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
- }catch(e){return null}
+const KL='https://data-api.binance.vision/api/v3/klines';
+async function kl(sym,tf,lim=350){
+ const r=await fetch(`${KL}?symbol=${sym}USDT&interval=${tf}&limit=${lim}`);
+ if(!r.ok)throw 0;
+ const now=Date.now(),raw=await r.json();
+ const closed=raw.filter(x=>x[6]<=now);
+ const use=closed.length>=50?closed:raw.slice(0,-1);
+ return use.map(x=>({time:Math.floor(x[0]/1000),open:+x[1],high:+x[2],low:+x[3],close:+x[4],vol:+x[5]}));
 }
 
+let ST={enabled:[]},ALL_SIGS=[],FILT_M='ALL';
+
+// Load validated strategy rules
 (async()=>{
  try{const r=await fetch('/strategy.json');if(r.ok)ST=await r.json()}catch(e){}
- ST.enabled=(ST.enabled&&ST.enabled.length)?ST.enabled:DEFAULT_RULES;
- const smcActive=typeof window.SMC!=='undefined';
- $('ST').innerHTML='<h3>Active Signal Engines</h3>'+
-  (smcActive?'<p><b>✅ SMC Engine Active:</b> Scanning Order Blocks, Fair Value Gaps (FVG), Liquidity Sweeps, Inducement (IDM) & Multi-Timeframe Structure (1D / 4H / 1H / 15M).</p>':'<p class="msg">⚠️ Warning: smc-core.js is not loaded. Add &lt;script src="smc-core.js"&gt;&lt;/script&gt; in signals.html.</p>')+
-  '<table>'+ST.enabled.map(e=>`<tr><td><b>${e.name}</b><br><small class="msg">${e.tf} · SL ${e.cfg.k}×ATR · TP ${e.cfg.m}R</small></td><td>${e.stats.trades} trades<br><small class="msg">${(e.stats.hitRate*100).toFixed(0)}% win est.</small></td><td><small class="msg">expectancy</small><br>train ${e.stats.expTrain>=0?'+':''}${e.stats.expTrain}R<br>val ${e.stats.expValidation>=0?'+':''}${e.stats.expValidation}R<br>test ${e.stats.expTest>=0?'+':''}${e.stats.expTest}R</td></tr>`).join('')+'</table>'+
-  '<p class="msg">'+(ST.generated?'Tested '+new Date(ST.generated).toLocaleDateString()+' on '+(ST.coins||[]).length+' coins.':'Running enhanced built-in SMC + Volume/Structure rules.')+' Past results do not guarantee future profit.</p>';
+ ST.enabled=ST.enabled||[];
+ $('ST').innerHTML='<h3>✅ Active Signal Engines &amp; Validated Rules</h3>'+
+  `<p class="msg" style="margin-bottom:8px">✅ <b>Multi-Engine Active:</b> Scanning Smart Money Concepts (OB, FVG, Liquidity/IDM Sweeps), Fibonacci Golden Zone (0.5–0.62 + Clusters), 70 Chart Patterns &amp; Validated Strategy Rules on CLOSED candles.</p>`+
+  (ST.enabled.length?'<table>'+ST.enabled.map(e=>`<tr><td><b>${e.name}</b><br><small class="msg">${e.tf} · SL ${e.cfg.k}×ATR · TP ${e.cfg.m}R</small></td><td>${e.stats.trades} trades<br><small class="msg">${(e.stats.hitRate*100).toFixed(0)}% wins</small></td><td><small class="msg">expectancy</small><br>train ${e.stats.expTrain>=0?'+':''}${e.stats.expTrain}R<br>val ${e.stats.expValidation>=0?'+':''}${e.stats.expValidation}R<br>test ${e.stats.expTest>=0?'+':''}${e.stats.expTest}R</td></tr>`).join('')+'</table><p class="msg">Tested '+(ST.generated?new Date(ST.generated).toLocaleDateString():'')+' on '+(ST.coins||[]).length+' coins. Past results do not guarantee future profit.</p>':'<p class="msg">Strategy rules ready. Use the scanner above to scan SMC, Fibonacci &amp; Chart Patterns across the top 30 coins.</p>');
 })();
 
-$('scan').onclick=async()=>{
- const out=$('out'),list=$('coins').value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean).slice(0,12),rows=[];
- let k=0;out.textContent='Scanning market structure, volume & SMC patterns...';
- const hasSMC=typeof window.SMC!=='undefined',hasSTRAT=typeof window.STRAT!=='undefined';
- const tfs=new Set(['15m','1h','4h',...(ST.enabled||[]).map(e=>e.tf)]);
- if(hasSMC)tfs.add('1d');
+// Scan a single coin + timeframe across all 4 methods (SMC, FIB, PAT, STRAT)
+function analyzeCoinTF(sym,tf,c,td){
+ const found=[],last=c[c.length-1].close;
+ const A=SMC.analyze(c,/m$/.test(tf)?5:4);
 
- for(const sym of list){
-  out.textContent=`Scanning ${sym} (${++k}/${list.length})...`;
-  const data={};
-  for(const tf of tfs){
-   const c=await fetchKlines(sym,tf,500);
-   if(c&&c.length>=210)data[tf]=c;
+ // 1. SMC Check
+ const T=SMC.setup(c,A);
+ if(T&&!T.none){
+  const dist=Math.abs(last-T.entry)/last;
+  if(T.inside||dist<=0.025){
+   const G=SMC.grade(T,td)||{g:'B',pts:5};
+   found.push({
+    sym,tf,method:'SMC',mLabel:'SMC ('+T.src+(T.conf?'+FVG':'')+')',
+    d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(x=>x.p),rr:(T.tps&&T.tps[0]?T.tps[0].rr:2),
+    inZone:!!T.inside,dist,grade:G.g,pts:G.pts+(T.inside?3:0),
+    status:T.inside?'🔥 In SMC Zone':pp(last,T.entry)+' to zone',
+    why:`${T.d>0?'Bullish':'Bearish'} ${T.src}${T.conf?' + FVG confluence':''}${T.sweep?' + Liquidity/IDM swept':''}`
+   });
   }
+ }
 
-  // 1. Smart Money Concepts (SMC) Multi-Timeframe & Pattern Signals
-  if(hasSMC&&data['1h']){
-   let td=null;
-   if(data['1d']&&data['4h']&&data['1h']&&data['15m']){
-    try{td=SMC.topDown(data)}catch(e){}
-   }
-   for(const tf of ['15m','1h','4h']){
-    const c=data[tf];if(!c)continue;
-    const A=SMC.analyze(c),S=SMC.setup(c,A);
-    if(S&&!S.none&&S.tps&&S.tps.length){
-     const gr=SMC.grade(S,td)||{g:'B',pts:5},dist=Math.abs(S.last-S.entry)/A.atr;
-     // Show setups where price is inside or near the entry zone (<= 2.5 ATR) and aligned with HTF
-     if(dist<=2.5&&(!td||!td.dir||td.dir===S.d||gr.pts>=6)){
-      const ms=TFMS[tf]||36e5,age=Math.max(0,Math.round((Date.now()-(c[c.length-1].time*1000+ms))/60000));
-      const tags=[`SMC ${S.src}`,`Grade ${gr.g}`];
-      if(S.conf)tags.push('FVG Confluence');
-      if(S.sweep)tags.push('Liq Sweep/IDM');
-      if(S.inside)tags.push('🔥 AT ZONE NOW');
-      rows.push({
-       sym,tf,d:S.d,age,score:gr.pts+(S.inside?3:0),
-       name:tags.join(' · '),
-       p:{entry:S.entry,sl:S.sl,tp:S.tps[0].p,tp2:S.tps[1]?S.tps[1].p:null}
-      });
-     }
-    }
-   }
-  }
-
-  // 2. STRAT Core Signals (Checks last 2 closed candles + HTF 4H structure filter)
-  if(hasSTRAT&&ST.enabled.length){
-   const htfBias=(hasSMC&&data['4h'])?SMC.analyze(data['4h']).trend:0;
-   for(const e of ST.enabled){
-    const c=data[e.tf];if(!c||c.length<250)continue;
-    const P=STRAT.prep(c),ms=TFMS[e.tf]||36e5;
-    for(let idx=c.length-1;idx>=c.length-2;idx--){
-     const d=STRAT.signal(P,idx,e.cfg);
-     if(d&&(!htfBias||htfBias===d)){
-      const age=Math.max(0,Math.round((Date.now()-(c[idx].time*1000+ms))/60000));
-      const pl=STRAT.plan(P,idx,e.cfg,d,c[idx].close);
-      const isFresh=idx===c.length-1;
-      rows.push({
-       sym,tf:e.tf,d,age,score:isFresh?7:5,
-       name:`${e.name}${htfBias===d?' · 4H Aligned':''}${isFresh?' · Fresh Close':''}`,
-       p:{entry:pl.entry,sl:pl.sl,tp:pl.tp,tp2:null}
-      });
-      break;
-     }
-    }
+ // 2. Fibonacci Check
+ if(typeof FIB!=='undefined'){
+  const F=FIB.fib(c,A,FIB.DEF);
+  if(F&&!F.broken){
+   const dist=F.state==='inside'?0:Math.abs(last-F.entry)/last;
+   if(F.state==='inside'||dist<=0.025){
+    const rx=FIB.reactions(c,A,F.d),G=FIB.grade(F,rx)||{g:'B',pts:5};
+    found.push({
+     sym,tf,method:'FIB',mLabel:`Fibonacci (${F.zr[0]}–${F.zr[1]})`,
+     d:F.d,entry:F.entry,sl:F.sl,tps:(F.tps||[]).map(x=>x.p),rr:(F.tps&&F.tps[0]?F.tps[0].rr:2),
+     inZone:F.state==='inside',dist,grade:G.g,pts:G.pts+(F.state==='inside'?3:0),
+     status:F.state==='inside'?'🔥 In Fib Golden Zone':pp(last,F.entry)+' to Fib zone',
+     why:`Fib ${F.zr[0]}–${F.zr[1]} retracement${F.conf.length?' + SMC '+F.conf.join('+'):''}${F.clusterInZone?' + Fib Cluster':''}`
+    });
    }
   }
  }
 
- // Sort signals so highest-grade and active-zone setups appear first
- rows.sort((a,b)=>b.score-a.score||a.age-b.age);
+ // 3. Chart Patterns Check
+ if(typeof PAT!=='undefined'){
+  const pats=PAT.detect(c,A).filter(p=>p.dir&&p.tps&&p.tps.length);
+  for(const p of pats.slice(0,2)){
+   const dist=Math.abs(last-p.entry)/last;
+   const isBrk=/breakout|breakdown|at zone|at D|at point 5|at 3rd drive/.test(p.status);
+   const near=dist<=0.02||(A.atr&&Math.abs(last-p.entry)<=A.atr*1.0);
+   if(isBrk||near){
+    const pts=(isBrk?7:5)+(p.dir===A.trend?2:0)+(dist<=0.008?2:0);
+    const g=pts>=8?'A+':pts>=6?'A':'B';
+    found.push({
+     sym,tf,method:'PAT',mLabel:p.names[0],
+     d:p.dir,entry:p.entry,sl:p.sl,tps:p.tps.map(x=>x.p),rr:p.tps[0]?p.tps[0].rr:2,
+     inZone:isBrk||dist<=0.006,dist,grade:g,pts,
+     status:isBrk?`🔥 ${p.status}`:pp(last,p.entry)+' to breakout/entry',
+     why:`${p.names[0]} (${p.status}) · Target RR ${(p.tps[0]?.rr||1.5).toFixed(1)}`
+    });
+   }
+  }
+ }
 
- out.innerHTML=rows.length?'<table>'+rows.map(r=>`<tr><td><b>${r.sym}</b> ${r.tf} <span class="${r.d>0?'up':'down'}">${r.d>0?'LONG':'SHORT'}</span><br><small class="msg">${r.name} · ${r.age}m ago</small></td><td>Entry ≈ ${pf(r.p.entry)}<br>SL ${pf(r.p.sl)}<br>TP1 ${pf(r.p.tp)}${r.p.tp2?`<br>TP2 ${pf(r.p.tp2)}`:''}</td><td><a href="risk.html?e=${r.p.entry}&s=${r.p.sl}&t1=${r.p.tp}${r.p.tp2?`&t2=${r.p.tp2}`:''}">Risk calc</a></td></tr>`).join('')+'</table><p class="msg">Sorted by setup quality. Prioritize "AT ZONE NOW", Grade A+/A, and 4H Aligned signals.</p>':'<p class="msg">No high-probability setup on closed candles right now. Wait for clean market structure alignment.</p>';
+ // 4. Validated Strategy Rules Check
+ if(typeof STRAT!=='undefined'&&c.length>=210){
+  const P=STRAT.prep(c),i=c.length-1;
+  const rules=ST.enabled.filter(x=>x.tf===tf);
+  for(const e of rules){
+   const d=STRAT.signal(P,i,e.cfg);
+   if(d){
+    const pl=STRAT.plan(P,i,e.cfg,d,last);
+    found.push({
+     sym,tf,method:'STRAT',mLabel:e.name,
+     d,entry:pl.entry,sl:pl.sl,tps:[pl.tp],rr:e.cfg.m||2,
+     inZone:true,dist:0,grade:'A',pts:8,
+     status:'🔥 Candle Closed Signal',
+     why:`Validated Rule: ${e.name} (SL ${e.cfg.k}×ATR, TP ${e.cfg.m}R)`
+    });
+   }
+  }
+ }
+
+ // Boost score if multiple methods agree on the same coin, timeframe & direction (Confluence!)
+ for(const s of found){
+  const others=found.filter(o=>o!==s&&o.d===s.d&&o.method!==s.method);
+  if(others.length){
+   s.confluence=others.map(o=>o.method);
+   s.pts+=others.length*2;
+   if(s.pts>=9)s.grade='A+';
+  }
+ }
+ return found;
+}
+
+// Calculate and render which method (SMC vs Fibonacci vs Chart Patterns) is trending right now
+function renderTrending(){
+ const box=$('TR');if(!box)return;
+ if(!ALL_SIGS.length){
+  box.innerHTML='<h3>🔥 Trending Method &amp; Market Pulse</h3><p class="msg">No active setups found yet. Try scanning Top 30 coins across all timeframes.</p>';
+  return;
+ }
+
+ const stats={
+  SMC:{name:'SMC (Smart Money Concepts)',inZone:0,highG:0,total:0,score:0,bull:0,bear:0,desc:'Order Blocks, FVG & Liquidity Sweeps මත පදනම් වූ institutional entries දැනට ඉතා හොඳින් ක්‍රියාත්මක වේ.'},
+  FIB:{name:'Fibonacci Golden Zone (0.5–0.62)',inZone:0,highG:0,total:0,score:0,bull:0,bear:0,desc:'Market එකේ පැහැදිලි Impulse Swing Legs සහ 0.5–0.62 OTE Pullbacks බහුලව දක්නට ලැබේ.'},
+  PAT:{name:'Chart Patterns (Breakouts & Harmonics)',inZone:0,highG:0,total:0,score:0,bull:0,bear:0,desc:'Classical Breakouts (Triangles, Flags, Double Top/Bottom) සහ Harmonic Reversals දැනට ප්‍රබලව පවතී.'}
+ };
+
+ let totalBull=0,totalBear=0;
+ for(const s of ALL_SIGS){
+  if(s.d>0)totalBull++;else if(s.d<0)totalBear++;
+  const st=stats[s.method];if(!st)continue;
+  st.total++;
+  if(s.inZone)st.inZone++;
+  if(s.grade==='A+'||s.grade==='A')st.highG++;
+  if(s.d>0)st.bull++;else st.bear++;
+  st.score+=(s.inZone?4:1)+(s.grade==='A+'?4:s.grade==='A'?2:1)+(s.confluence?2:0);
+ }
+
+ const ranked=Object.entries(stats).sort((a,b)=>b[1].score-a[1].score);
+ const best=ranked[0][1];
+ const totDir=Math.max(1,totalBull+totalBear),bullPct=Math.round((totalBull/totDir)*100),bearPct=100-bullPct;
+ const mktBias=bullPct>=60?`<span class="tag up">BULLISH MARKET (${bullPct}% Longs)</span>`:bearPct>=60?`<span class="tag down">BEARISH MARKET (${bearPct}% Shorts)</span>`:`<span class="tag n">MIXED / RANGING (${bullPct}% Bull · ${bearPct}% Bear)</span>`;
+
+ box.innerHTML=`<h3>🔥 Trending Method &amp; Market Pulse</h3>
+  <p style="margin:6px 0"><b>🏆 මේ වෙලාවේ හොඳම (Trending) Method එක:</b> <span class="grade" style="background:#f0b429;color:#0e1621;font-size:0.95em;padding:3px 8px">${best.name}</span> &nbsp; ${mktBias}</p>
+  <p class="msg" style="margin:4px 0 10px">${best.desc}</p>
+  <table>
+   <tr><th>Method</th><th>🔥 In Zone Now</th><th>A+ / A Setups</th><th>Total Signals</th><th>Bias (L/S)</th></tr>
+   ${ranked.map(([k,v],idx)=>`<tr style="${idx===0?'background:rgba(240,180,41,0.1);font-weight:600':''}">
+    <td>${idx===0?'👑 ':''}<b>${v.name}</b></td>
+    <td><b class="up">${v.inZone}</b> in zone</td>
+    <td>${v.highG} high-grade</td>
+    <td>${v.total} setups</td>
+    <td><span class="up">${v.bull}L</span> / <span class="down">${v.bear}S</span></td>
+   </tr>`).join('')}
+  </table>`;
+}
+
+// Render filtered signals table with Entry, SL, TP, Confluence & direct action buttons
+function renderResults(){
+ const out=$('out'),onlyZone=$('sstat').value==='zone';
+ let list=ALL_SIGS.filter(s=>(FILT_M==='ALL'||s.method===FILT_M)&&(!onlyZone||s.inZone));
+ list.sort((a,b)=>(b.inZone-a.inZone)||(b.pts-a.pts)||(a.dist-b.dist));
+
+ if(!list.length){
+  out.innerHTML='<p class="msg">No matching signals right now for this filter. Try switching to "All Methods" or "Show: In-Zone + Near Entry".</p>';
+  return;
+ }
+
+ out.innerHTML=`<p class="msg" style="margin:8px 0">Found <b>${list.length}</b> actionable setups (${list.filter(x=>x.inZone).length} 🔥 right inside entry zone). Sorted by Entry Zone &amp; Grade.</p>
+  <table>
+   <tr><th>Coin &amp; TF</th><th>Method &amp; Confluence</th><th>Status</th><th>Entry / SL / TP</th><th>Action</th></tr>
+   ${list.slice(0,45).map((s,idx)=>{
+    const confTag=s.confluence?`<br><span class="tag up" style="font-size:0.75em">⚡ Confluence: ${s.method} + ${s.confluence.join(' + ')}</span>`:'';
+    const tpStr=(s.tps||[]).slice(0,2).map((p,i)=>`TP${i+1}: ${pf(p)}`).join(' · ');
+    return `<tr>
+     <td>${logo(s.sym)} <b>${s.sym}</b> <small class="msg">${s.tf}</small><br><span class="tag ${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span> <span class="grade" style="background:${GC[s.grade]||'#4ea1ff'}">${s.grade}</span></td>
+     <td><b>${s.mLabel}</b>${confTag}<br><small class="msg">${s.why}</small></td>
+     <td><b class="${s.inZone?'up':'msg'}">${s.status}</b></td>
+     <td><b style="color:#f0b429">Entry: ${pf(s.entry)}</b><br><span class="down">SL: ${pf(s.sl)}</span><br><span class="up">${tpStr}</span></td>
+     <td>
+      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="${MPAGE[s.method]||'smc.html'}">📈 Chart</a>
+      <button class="moreBtn takeBtn" data-i="${idx}" style="margin:2px 0">📒 Trade</button>
+      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="risk.html?e=${s.entry}&s=${s.sl}&t1=${s.tps[0]||''}">Risk</a>
+     </td>
+    </tr>`;
+   }).join('')}
+  </table>`;
+
+ document.querySelectorAll('.takeBtn').forEach(b=>b.onclick=()=>{
+  const s=list[+b.dataset.i];if(!s)return;
+  if(typeof Ctx!=='undefined'&&Ctx.addTrade){
+   Ctx.addTrade({method:s.method,sym:s.sym,tf:s.tf,d:s.d,entry:s.entry,sl:s.sl,tps:s.tps});
+   b.textContent='✓ Added';
+  }
+ });
+}
+
+// Run scanner on a list of coins
+async function runScan(coinList){
+ const out=$('out');
+ const tfSel=$('stf').value;
+ const tfs=tfSel==='all'?['15m','1h','4h']:[tfSel];
+ ALL_SIGS=[];
+ out.innerHTML=`<p class="msg">Scanning 0/${coinList.length} coins across ${tfs.join(', ')} (SMC + Fibonacci + Chart Patterns)...</p>`;
+
+ let done=0;
+ for(let i=0;i<coinList.length;i+=5){
+  await Promise.all(coinList.slice(i,i+5).map(async sym=>{
+   try{
+    const tfData={};
+    await Promise.all(tfs.map(async tf=>{tfData[tf]=await kl(sym,tf,320)}));
+    for(const tf of tfs){
+     const c=tfData[tf];
+     if(c&&c.length>=60){
+      const sigs=analyzeCoinTF(sym,tf,c,null);
+      ALL_SIGS.push(...sigs);
+     }
+    }
+   }catch(e){}
+   done++;
+   out.innerHTML=`<p class="msg">Scanning ${done}/${coinList.length} coins... (${ALL_SIGS.length} setups found so far)</p>`;
+  }));
+ }
+ renderTrending();
+ renderResults();
+}
+
+// Button: Scan Top 30 Coins by 24h USDT Volume
+$('scan30').onclick=async()=>{
+ const out=$('out');
+ out.innerHTML='<p class="msg">Fetching Top 30 most traded USDT coins from Binance...</p>';
+ try{
+  const r=await fetch('https://data-api.binance.vision/api/v3/ticker/24hr');
+  const all=(await r.json()).filter(t=>t.symbol.endsWith('USDT')&&!/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG/.test(t.symbol)).sort((a,b)=>b.quoteVolume-a.quoteVolume).slice(0,30);
+  const top30=all.map(t=>t.symbol.replace('USDT',''));
+  $('coins').value=top30.join(',');
+  await runScan(top30);
+ }catch(e){
+  out.innerHTML='<p class="msg">Could not fetch top 30 list. Scanning default coins instead...</p>';
+  const fallback=$('coins').value.split(',').map(x=>x.trim().toUpperCase()).filter(Boolean);
+  await runScan(fallback);
+ }
 };
+
+// Button: Scan custom typed coins
+$('scanCustom').onclick=async()=>{
+ const list=$('coins').value.split(',').map(x=>x.trim().toUpperCase().replace(/USDT$/,'')).filter(Boolean).slice(0,30);
+ if(!list.length)return;
+ await runScan(list);
+};
+
+// Method filter buttons & dropdowns
+document.querySelectorAll('.mflt').forEach(b=>b.onclick=()=>{
+ FILT_M=b.dataset.m;
+ document.querySelectorAll('.mflt').forEach(x=>x.classList.toggle('on',x===b));
+ if(ALL_SIGS.length)renderResults();
+});
+$('sstat').onchange=()=>{if(ALL_SIGS.length)renderResults()};
