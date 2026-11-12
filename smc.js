@@ -144,7 +144,7 @@ async function load(sym,first){
   if(first)await loadHTF();
   else force();
   loadTD(first);
-  if(first&&$('btout'))$('btout').textContent='';
+  if(first&&$('btout'))$('btout'].textContent='';
  }catch(err){
   console.error(err);
  }
@@ -365,4 +365,11 @@ function ctxCard(){
 
 document.addEventListener('click',e=>{if(e.target.id!=='jBtn'||!S.T||S.T.none||typeof Ctx==='undefined')return;const T=S.T;Ctx.addTrade({method:'SMC',sym:S.sym,tf:S.tf,d:T.d,entry:T.entry,sl:T.sl,tps:(T.tps||[]).map(t=>t.p)})});
 
-renderSV();setInterval(renderSV,60000);load('BTC',1);setInterval(()=>load(S.sym,0),20000);
+renderSV();
+setInterval(renderSV,60000);
+
+// URL එකෙන් ?sym=XYZ කියවාගෙන අදාළ coin එක load කිරීම (පෙරනිමියෙන් BTC)
+const urlParams = new URLSearchParams(window.location.search);
+const initSym = urlParams.get('sym') ? urlParams.get('sym').toUpperCase() : 'BTC';
+load(initSym, 1);
+setInterval(()=>load(S.sym,0),20000);
