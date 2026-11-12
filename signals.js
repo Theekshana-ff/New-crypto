@@ -191,6 +191,7 @@ function renderResults(){
     const tpStr=(s.tps||[]).slice(0,2).map((p,i)=>`TP${i+1}: ${pf(p)}`).join(' · ');
     const targetPage=MPAGE[s.method]||'smc.html';
     const chartLink=`${targetPage}?sym=${encodeURIComponent(s.sym)}&tf=${encodeURIComponent(s.tf)}`;
+    const riskLink=`risk.html?e=${s.entry}&s=${s.sl}&t1=${s.tps[0]||''}&t2=${s.tps[1]||''}&t3=${s.tps[2]||''}`;
 
     return `<tr>
      <td>${logo(s.sym)} <b>${s.sym}</b> <small class="msg">${s.tf}</small><br><span class="tag ${s.d>0?'up':'down'}">${s.d>0?'LONG':'SHORT'}</span> <span class="grade" style="background:${GC[s.grade]||'#4ea1ff'}">${s.grade}</span></td>
@@ -200,7 +201,7 @@ function renderResults(){
      <td>
       <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="${chartLink}">📈 Chart</a>
       <button class="moreBtn takeBtn" data-i="${idx}" style="margin:2px 0">📒 Trade</button>
-      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="risk.html?e=${s.entry}&s=${s.sl}&t1=${s.tps[0]||''}">Risk</a>
+      <a class="moreBtn" style="display:inline-block;margin:2px 0;text-decoration:none" href="${riskLink}">Risk</a>
      </td>
     </tr>`;
    }).join('')}
