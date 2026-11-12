@@ -5,8 +5,8 @@ const signMexc = (apiKey, secret, ts, paramStr) =>
   crypto.createHmac('sha256', secret).update(apiKey + ts + paramStr).digest('hex');
 
 async function mexcReq(method, path, payload = null) {
-  const apiKey = process.env.MEXC_API_KEY;
-  const secret = process.env.MEXC_API_SECRET;
+  const apiKey = (process.env.MEXC_API_KEY || '').trim();
+  const secret = (process.env.MEXC_API_SECRET || '').trim();
   if (!apiKey || !secret) throw new Error('MEXC API Keys are missing in Vercel Environment Variables.');
 
   const ts = Date.now().toString();
@@ -44,6 +44,7 @@ async function mexcReq(method, path, payload = null) {
 // Fetch Top 30 USDT Coins live metrics for AI analysis
 async function getTop30MarketData() {
   const r = await fetch('https://data-api.binance.vision/api/v3/ticker/24hr');
+  if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
   return all
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG/.test(t.symbol))
@@ -59,9 +60,9 @@ async function getTop30MarketData() {
     }));
 }
 
-// Ask Gemini AI to pick the single best high-probability Futures trade from Top 30
+// Ask Gemini AI with model fallback & clean JSON extraction
 async function pickBestCoinWithGemini(marketList, timeframe) {
-  const geminiKey = process.env.GEMINI_API_KEY;
+  const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!geminiKey) throw new Error('GEMINI_API_KEY is missing in Vercel Environment Variables.');
 
   const prompt = `You are an elite institutional Crypto Futures AI Trading Agent.
@@ -71,7 +72,7 @@ ${JSON.stringify(marketList)}
 Select the SINGLE BEST coin with the strongest momentum, liquidity, and cleanest Risk-to-Reward setup right now for a MEXC USDT-M Futures trade (LONG or SHORT).
 Calculate exact Entry, Stop-Loss (SL), and Take-Profit (TP) prices with at least 1:2 Risk-to-Reward ratio.
 
-Respond ONLY in valid JSON with this exact schema:
+Respond ONLY with a raw JSON object (no markdown formatting):
 {
   "coin": "BTC",
   "direction": "LONG",
@@ -82,33 +83,61 @@ Respond ONLY in valid JSON with this exact schema:
   "reason": "Clear 2-sentence explanation in Sinhala & English of why this coin was chosen and its profit target."
 }`;
 
-  const r = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { responseMimeType: 'application/json' }
-      })
+  const models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  let lastErr = '';
+
+  for (const model of models) {
+    try {
+      const r = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: {
+              temperature: 0.2,
+              responseMimeType: 'application/json'
+            }
+          })
+        }
+      );
+      const j = await r.json();
+      if (!r.ok || j.error) {
+        lastErr = j.error?.message || `HTTP ${r.status} on ${model}`;
+        continue;
+      }
+      const rawText = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const cleaned = rawText.replace(/```json|```/gi, '').trim();
+      const match = cleaned.match(/\{[\s\S]*\}/);
+      if (!match) {
+        lastErr = `Invalid JSON format from ${model}`;
+        continue;
+      }
+      const parsed = JSON.parse(match[0]);
+      if (!parsed.coin || !parsed.direction || !parsed.entry) {
+        lastErr = `Incomplete trade parameters from ${model}`;
+        continue;
+      }
+      return parsed;
+    } catch (e) {
+      lastErr = e.message;
     }
-  );
-  const j = await r.json();
-  const text = j.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Gemini AI did not return a valid decision.');
-  return JSON.parse(text);
+  }
+
+  throw new Error(`Gemini API Error: ${lastErr || 'Unknown failure. Check GEMINI_API_KEY in Vercel.'}`);
 }
 
 // Get contract size & execute MEXC Futures Order
 async function openFuturesPosition(pick, marginUsdt, leverage) {
-  const symbol = `${pick.coin}_USDT`;
+  const symbol = `${pick.coin.toUpperCase().replace(/USDT$/, '')}_USDT`;
   const detail = await mexcReq('GET', '/api/v1/contract/detail', { symbol });
   const contractSize = Number(detail.contractSize || 1);
   const price = Number(pick.entry);
 
   const notional = marginUsdt * leverage;
   const vol = Math.max(1, Math.floor(notional / (price * contractSize)));
-  const side = pick.direction === 'LONG' ? 1 : 3;
+  const side = pick.direction.toUpperCase() === 'LONG' ? 1 : 3;
 
   const orderPayload = {
     symbol,
@@ -129,9 +158,9 @@ async function openFuturesPosition(pick, marginUsdt, leverage) {
 module.exports = async (req, res) => {
   try {
     const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) : req.query;
-    const secret = body.secret || req.headers['x-secret'];
+    const secret = (body.secret || req.headers['x-secret'] || '').trim();
 
-    if (!process.env.AGENT_SECRET || secret !== process.env.AGENT_SECRET) {
+    if (!process.env.AGENT_SECRET || secret !== process.env.AGENT_SECRET.trim()) {
       return res.status(401).json({ error: 'Invalid Agent Password (AGENT_SECRET).' });
     }
 
