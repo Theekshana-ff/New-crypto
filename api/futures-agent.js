@@ -49,11 +49,15 @@ async function getContractMap() {
     const j = await r.json();
     const map = {};
     (j.data || []).forEach(c => {
-      map[c.symbol] = {
-        contractSize: Number(c.contractSize || 1),
-        maxLeverage: Number(c.maxLeverage || 50),
-        minVol: Number(c.minVol || 1)
-      };
+      // Only include active USDT perpetual contracts (state === 0)
+      if (c.symbol && c.symbol.endsWith('_USDT') && (c.state === 0 || c.state == null)) {
+        map[c.symbol] = {
+          symbol: c.symbol,
+          contractSize: Number(c.contractSize || 1),
+          maxLeverage: Number(c.maxLeverage || 50),
+          minVol: Number(c.minVol || 1)
+        };
+      }
     });
     contractCache = map;
     cacheTime = Date.now();
@@ -83,7 +87,6 @@ async function getMexcTickerMap() {
   }
 }
 
-// UPDATE #3 & #9: Order Book Imbalance + Spread Guard
 async function checkOrderBookAndSpread(coin, dir) {
   try {
     const r = await fetch(`https://data-api.binance.vision/api/v3/depth?symbol=${coin}USDT&limit=20`);
@@ -97,14 +100,12 @@ async function checkOrderBookAndSpread(coin, dir) {
     const bestAsk = asks[0][0];
     const spreadPct = ((bestAsk - bestBid) / bestBid) * 100;
 
-    // Update #9: Block if Bid-Ask spread > 0.15%
     if (spreadPct > 0.15) return { ok: false, reason: 'Spread too wide' };
 
     const bidVol = bids.reduce((s, b) => s + b[0] * b[1], 0);
     const askVol = asks.reduce((s, a) => s + a[0] * a[1], 0) || 1;
     const obRatio = +(bidVol / askVol).toFixed(2);
 
-    // Update #3: Block LONG if massive Sell Wall (obRatio < 0.55), Block SHORT if massive Buy Wall (obRatio > 1.85)
     if (dir === 'LONG' && obRatio < 0.55) return { ok: false, reason: 'Heavy Sell Wall Ahead' };
     if (dir === 'SHORT' && obRatio > 1.85) return { ok: false, reason: 'Heavy Buy Wall Below' };
 
@@ -404,7 +405,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const atr = calcATRVal(highs, lows, closes, 14);
     const last = closes[n - 1];
 
-    // UPDATE #7: Anti-Spike Wick Filter (Reject abnormal 4%+ single-bar pump/dump spikes)
     const lastBarRangePct = ((highs[n - 1] - lows[n - 1]) / last) * 100;
     if (lastBarRangePct > 4.2) return null;
 
@@ -419,8 +419,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     else if (votes.SHORT.length > votes.LONG.length && (htfBear || ema20 <= ema50)) dir = 'SHORT';
     if (!dir) return null;
 
-    // UPDATE #1: Funding Rate Whale Trap Filter
-    // Block LONG if funding rate is extremely positive (>0.08%), Block SHORT if extremely negative (<-0.08%)
     if (dir === 'LONG' && fundingRate > 0.0008) return null;
     if (dir === 'SHORT' && fundingRate < -0.0008) return null;
 
@@ -436,7 +434,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const methodCount = matchedMethods.length;
     const activePillars = Object.keys(pillars).filter(p => pillars[p][dir] >= 2).length;
 
-    // UPDATE #5: Loss-Streak Sniper Recovery Mode requires higher confluence
     const reqMethods = sniperRecovery ? 14 : 12;
     const reqPillars = sniperRecovery ? 4 : 3;
 
@@ -446,7 +443,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
       if (methodCount < reqMethods || activePillars < reqPillars) return null;
     }
 
-    // UPDATE #3 & #9: Live Order Book Imbalance + Spread Check
     const obCheck = await checkOrderBookAndSpread(coin, dir);
     if (!obCheck.ok) return null;
 
@@ -491,21 +487,22 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
 
+  // STRICT FILTER: Only scan coins that ACTUALLY exist in MEXC Futures (cMap[sym] && mexcTickers[sym])
   const candidates = all
-    .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
+    .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|USDE|BFUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
     .sort((a, b) => Number(b.quoteVolume) - Number(a.quoteVolume))
-    .slice(0, 60)
     .map(t => {
       const coin = t.symbol.replace('USDT', '');
       const sym = `${coin}_USDT`;
-      const price = Number(t.lastPrice);
+      if (!cMap[sym] || !mexcTickers[sym]) return null;
+      const price = Number(mexcTickers[sym].lastPrice || t.lastPrice);
       const chg = Number(t.priceChangePercent);
-      const cInfo = cMap[sym] || { contractSize: 1, maxLeverage: 50 };
+      const cInfo = cMap[sym];
       const minContractUsdt = +(price * cInfo.contractSize).toFixed(2);
       const fundingRate = mexcTickers[sym]?.fundingRate || 0;
       return { coin, symbol: sym, price, chgNum: chg, change24h: chg.toFixed(2) + '%', minContractUsdt, fundingRate };
     })
-    .filter(c => c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 20)
+    .filter(c => c && c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 20)
     .slice(0, 30);
 
   const verified = [];
@@ -552,7 +549,7 @@ async function confirmWithGemini(verifiedSetups, timeframe) {
 These setups passed all filters:
 ${JSON.stringify(verifiedSetups.slice(0, 4))}
 
-Pick the SINGLE SAFEST setup. Respond ONLY with raw JSON:
+Pick the SINGLE SAFEST setup from the list above (use the exact "coin" name from the list). Respond ONLY with raw JSON:
 {
   "coin": "COIN",
   "direction": "LONG",
@@ -582,7 +579,8 @@ Pick the SINGLE SAFEST setup. Respond ONLY with raw JSON:
     const match = rawText.replace(/```json|```/gi, '').trim().match(/\{[\s\S]*\}/);
     if (match) {
       const parsed = JSON.parse(match[0]);
-      const matchedOrig = verifiedSetups.find(v => v.coin === parsed.coin);
+      const cleanParsedCoin = String(parsed.coin || '').toUpperCase().replace(/_?USDT$/, '');
+      const matchedOrig = verifiedSetups.find(v => v.coin === cleanParsedCoin);
       if (matchedOrig) {
         return {
           ...matchedOrig,
@@ -598,16 +596,22 @@ Pick the SINGLE SAFEST setup. Respond ONLY with raw JSON:
 }
 
 async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) {
-  const cleanCoin = pick.coin.toUpperCase().replace(/USDT$/, '').replace(/[^A-Z0-9]/g, '');
+  const cleanCoin = pick.coin.toUpperCase().replace(/_?USDT$/, '').replace(/[^A-Z0-9]/g, '');
   const symbol = `${cleanCoin}_USDT`;
-  const detail = await mexcReq('GET', '/api/v1/contract/detail', { symbol });
+  const [cMap, tickers] = await Promise.all([getContractMap(), getMexcTickerMap()]);
+  const detail = cMap[symbol];
+  if (!detail) {
+    throw new Error(`Contract ${symbol} not available on MEXC Futures.`);
+  }
+
   const contractSize = Number(detail.contractSize || 1);
   const maxLev = Number(detail.maxLeverage || 50);
-  const price = Number(pick.entry);
-  const minContractUsdt = price * contractSize;
+  // Use live MEXC price so entry/SL/TP match MEXC's exact mark price
+  const liveMexcPrice = Number(tickers[symbol]?.lastPrice || pick.entry);
+  const minContractUsdt = liveMexcPrice * contractSize;
 
   const leverage = autoLeverage
-    ? calcSmartTargetLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), pick.confidence, maxLev)
+    ? calcSmartTargetLeverage(marginUsdt, minContractUsdt, liveMexcPrice, Number(pick.sl), pick.confidence, maxLev)
     : Math.min(maxLev, Math.max(1, reqLeverage));
 
   const notional = marginUsdt * leverage;
@@ -616,7 +620,7 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
 
   const orderPayload = {
     symbol,
-    price,
+    price: liveMexcPrice,
     vol,
     leverage,
     side,
@@ -628,6 +632,21 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
 
   const orderId = await mexcReq('POST', '/api/v1/private/order/submit', orderPayload);
   return { orderId, symbol, vol, leverage, contractSize, notional: +(vol * minContractUsdt).toFixed(2) };
+}
+
+// Auto-Fallback: If #1 coin fails order submission on MEXC, automatically try #2 or #3
+async function executeWithFallback(verifiedSetups, primaryPick, marginUsdt, reqLeverage, autoLeverage) {
+  const queue = [primaryPick, ...verifiedSetups.filter(s => s.coin !== primaryPick.coin)].slice(0, 3);
+  let lastErr = null;
+  for (const candidate of queue) {
+    try {
+      const exec = await openFuturesPosition(candidate, marginUsdt, reqLeverage, autoLeverage);
+      return { pick: { ...candidate, topCandidates: primaryPick.topCandidates }, exec };
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+  throw lastErr || new Error('Order execution failed across top candidates.');
 }
 
 async function notifyTelegram(pick, exec, marginUsdt, source = 'WEB') {
@@ -670,8 +689,8 @@ module.exports = async (req, res) => {
       if (!setups.length || setups[0].confidence < 78) {
         return res.status(200).json({ ok: true, status: 'No setup passed filter right now.', btcRegime });
       }
-      const pick = await confirmWithGemini(setups, '15m');
-      const exec = await openFuturesPosition(pick, autoMargin, 18, true);
+      const primaryPick = await confirmWithGemini(setups, '15m');
+      const { pick, exec } = await executeWithFallback(setups, primaryPick, autoMargin, 18, true);
       await notifyTelegram(pick, exec, autoMargin, '24/7 AUTO-WALLET CRON');
       return res.status(200).json({ ok: true, executed: exec, pick });
     }
@@ -755,7 +774,7 @@ module.exports = async (req, res) => {
         return res.status(400).json({ error: `Insufficient MEXC Futures USDT balance ($${availBal.toFixed(2)}). Minimum $0.50 required.` });
       }
 
-      let marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 1);
+      let marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 3.5);
       marginUsdt = Math.min(availBal * 0.95, marginUsdt);
 
       const reqLeverage = Math.min(30, Math.max(1, Number(body.leverage) || 20));
@@ -780,8 +799,8 @@ module.exports = async (req, res) => {
         });
       }
 
-      const pick = await confirmWithGemini(setups, timeframe);
-      const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
+      const primaryPick = await confirmWithGemini(setups, timeframe);
+      const { pick, exec } = await executeWithFallback(setups, primaryPick, marginUsdt, reqLeverage, autoLeverage);
       await notifyTelegram(pick, exec, marginUsdt, '10-UPGRADE PRO AGENT');
 
       return res.status(200).json({
