@@ -1,1 +1,9 @@
-{"regions":["fra1"]}
+{
+  "regions": ["fra1"],
+  "crons": [
+    {
+      "path": "/api/futures-agent?action=cron_tick",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}
