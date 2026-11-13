@@ -116,7 +116,7 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
-// --- WORLD'S TOP 25 TRADING METHODS ENGINE (5 PILLARS) ---
+// --- 25 INSTITUTIONAL METHODS (5 PILLARS) ---
 function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear) {
   const n = closes.length;
   const last = closes[n - 1];
@@ -148,21 +148,16 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
     pillars[pillar][dir]++;
   };
 
-  // =========================================================================
-  // PILLAR 1: SMART MONEY & INSTITUTIONAL (5 Methods)
-  // =========================================================================
-  // 1. SMC Order Block (OB) Bounce
+  // Pillar 1: SMC & ICT (5)
   const nearEma20 = Math.abs(last - ema20) / ema20 <= 0.018;
   if (nearEma20 && bullBar && last >= ema50) addVote('LONG', 'P1_SMC_ICT', '1.SMC-OB');
   if (nearEma20 && bearBar && last <= ema50) addVote('SHORT', 'P1_SMC_ICT', '1.SMC-OB');
 
-  // 2. SMC Market Structure (BOS / CHoCH)
   const high10 = Math.max(...highs.slice(-12, -2));
   const low10 = Math.min(...lows.slice(-12, -2));
   if (last > opens[n - 3] && lows[n - 1] > Math.min(...lows.slice(-20, -10))) addVote('LONG', 'P1_SMC_ICT', '2.SMC-BOS');
   if (last < opens[n - 3] && highs[n - 1] < Math.max(...highs.slice(-20, -10))) addVote('SHORT', 'P1_SMC_ICT', '2.SMC-BOS');
 
-  // 3. ICT Fair Value Gap (FVG Displacement)
   let bullFvg = false, bearFvg = false;
   for (let i = n - 7; i <= n - 2; i++) {
     if (lows[i] > highs[i - 2]) bullFvg = true;
@@ -171,38 +166,30 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (bullFvg && bullBar) addVote('LONG', 'P1_SMC_ICT', '3.ICT-FVG');
   if (bearFvg && bearBar) addVote('SHORT', 'P1_SMC_ICT', '3.ICT-FVG');
 
-  // 4. ICT Optimal Trade Entry (OTE 0.62 - 0.79 Retrace)
   if (fibFromHigh >= 0.50 && fibFromHigh <= 0.79 && bullBar) addVote('LONG', 'P1_SMC_ICT', '4.ICT-OTE');
   if (fibFromLow >= 0.50 && fibFromLow <= 0.79 && bearBar) addVote('SHORT', 'P1_SMC_ICT', '4.ICT-OTE');
 
-  // 5. Institutional Liquidity Sweep (Stop-Hunt Rejection)
   const lowerWick = Math.min(last, lastOpen) - lows[n - 1];
   const upperWick = highs[n - 1] - Math.max(last, lastOpen);
   const bodySize = Math.abs(last - lastOpen) || 0.0001;
   if ((lows[n - 2] <= low10 * 1.002 && last > low10) || lowerWick > bodySize * 0.8) addVote('LONG', 'P1_SMC_ICT', '5.Liq-Sweep');
   if ((highs[n - 2] >= high10 * 0.998 && last < high10) || upperWick > bodySize * 0.8) addVote('SHORT', 'P1_SMC_ICT', '5.Liq-Sweep');
 
-  // =========================================================================
-  // PILLAR 2: TREND & STRUCTURE (5 Methods)
-  // =========================================================================
-  // 6. Multi-Timeframe EMA Stack (HTF + LTF 20/50)
+  // Pillar 2: Trend & Structure (5)
   if (htfBull && ema20 > ema50) addVote('LONG', 'P2_TREND', '6.MTF-EMA');
   if (htfBear && ema20 < ema50) addVote('SHORT', 'P2_TREND', '6.MTF-EMA');
 
-  // 7. SuperTrend (10, 2.5 ATR Filter)
   const hl2 = (highs[n - 1] + lows[n - 1]) / 2;
   const stLower = hl2 - 2.2 * atr;
   const stUpper = hl2 + 2.2 * atr;
   if (last > stLower && last > ema20) addVote('LONG', 'P2_TREND', '7.SuperTrend');
   if (last < stUpper && last < ema20) addVote('SHORT', 'P2_TREND', '7.SuperTrend');
 
-  // 8. Ichimoku Cloud (Tenkan-sen 9 vs Kijun-sen 26)
   const tenkan = (Math.max(...highs.slice(-9)) + Math.min(...lows.slice(-9))) / 2;
   const kijun = (Math.max(...highs.slice(-26)) + Math.min(...lows.slice(-26))) / 2;
   if (last > kijun && tenkan >= kijun) addVote('LONG', 'P2_TREND', '8.Ichimoku');
   if (last < kijun && tenkan <= kijun) addVote('SHORT', 'P2_TREND', '8.Ichimoku');
 
-  // 9. ADX / Directional Movement (+DI vs -DI)
   let plusDM = 0, minusDM = 0;
   for (let i = n - 14; i < n; i++) {
     const upMove = highs[i] - highs[i - 1];
@@ -213,20 +200,15 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (plusDM > minusDM * 1.05) addVote('LONG', 'P2_TREND', '9.ADX-DI+');
   if (minusDM > plusDM * 1.05) addVote('SHORT', 'P2_TREND', '9.ADX-DI-');
 
-  // 10. Parabolic SAR Structure
   const psarBull = lows[n - 1] > Math.min(...lows.slice(-6, -1));
   const psarBear = highs[n - 1] < Math.max(...highs.slice(-6, -1));
   if (psarBull && last > ema50) addVote('LONG', 'P2_TREND', '10.PSAR');
   if (psarBear && last < ema50) addVote('SHORT', 'P2_TREND', '10.PSAR');
 
-  // =========================================================================
-  // PILLAR 3: MOMENTUM & OSCILLATORS (5 Methods)
-  // =========================================================================
-  // 11. RSI Safe Continuation Zone (No Overbought/Oversold Trap)
+  // Pillar 3: Momentum & Oscillators (5)
   if (rsi >= 44 && rsi <= 65) addVote('LONG', 'P3_MOMENTUM', '11.RSI-Safe');
   if (rsi <= 56 && rsi >= 35) addVote('SHORT', 'P3_MOMENTUM', '11.RSI-Safe');
 
-  // 12. MACD (12, 26, 9) Momentum
   const ema12Arr = calcEMAArray(closes, 12);
   const ema26Arr = calcEMAArray(closes, 26);
   const macdArr = ema12Arr.map((v, i) => v - ema26Arr[i]);
@@ -236,14 +218,12 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (macdHist > 0 || macdHist > prevHist) addVote('LONG', 'P3_MOMENTUM', '12.MACD');
   if (macdHist < 0 || macdHist < prevHist) addVote('SHORT', 'P3_MOMENTUM', '12.MACD');
 
-  // 13. Stochastic Oscillator (%K Turn)
   const h14 = Math.max(...highs.slice(-14));
   const l14 = Math.min(...lows.slice(-14));
   const stochK = h14 > l14 ? ((last - l14) / (h14 - l14)) * 100 : 50;
   if (stochK >= 30 && stochK <= 82 && bullBar) addVote('LONG', 'P3_MOMENTUM', '13.Stoch');
   if (stochK <= 70 && stochK >= 18 && bearBar) addVote('SHORT', 'P3_MOMENTUM', '13.Stoch');
 
-  // 14. CCI (Commodity Channel Index 20)
   const tpArr = closes.slice(-20).map((c, i) => (highs[n - 20 + i] + lows[n - 20 + i] + c) / 3);
   const tpMean = tpArr.reduce((a, b) => a + b, 0) / 20;
   const meanDev = tpArr.reduce((a, b) => a + Math.abs(b - tpMean), 0) / 20 || 1;
@@ -251,15 +231,11 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (cci > -20 && cci < 160) addVote('LONG', 'P3_MOMENTUM', '14.CCI');
   if (cci < 20 && cci > -160) addVote('SHORT', 'P3_MOMENTUM', '14.CCI');
 
-  // 15. Williams %R (14)
   const willR = h14 > l14 ? ((h14 - last) / (h14 - l14)) * -100 : -50;
   if (willR >= -75 && willR <= -18) addVote('LONG', 'P3_MOMENTUM', '15.Will%R');
   if (willR <= -25 && willR >= -82) addVote('SHORT', 'P3_MOMENTUM', '15.Will%R');
 
-  // =========================================================================
-  // PILLAR 4: VOLUME & ORDER FLOW (5 Methods)
-  // =========================================================================
-  // 16. Rolling VWAP (Volume Weighted Average Price)
+  // Pillar 4: Volume & Order Flow (5)
   let pvSum = 0, vSum = 0;
   for (let i = n - 24; i < n; i++) {
     const typ = (highs[i] + lows[i] + closes[i]) / 3;
@@ -270,7 +246,6 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (last >= vwap * 0.998) addVote('LONG', 'P4_VOLUME', '16.VWAP');
   if (last <= vwap * 1.002) addVote('SHORT', 'P4_VOLUME', '16.VWAP');
 
-  // 17. OBV (On-Balance Volume Slope)
   let obv = 0, obvPrev = 0;
   for (let i = n - 15; i < n; i++) {
     if (closes[i] > closes[i - 1]) obv += vols[i];
@@ -280,7 +255,6 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (obv >= obvPrev) addVote('LONG', 'P4_VOLUME', '17.OBV');
   if (obv <= obvPrev) addVote('SHORT', 'P4_VOLUME', '17.OBV');
 
-  // 18. CMF (Chaikin Money Flow 20)
   let mfvSum = 0, volSum20 = 0;
   for (let i = n - 20; i < n; i++) {
     const hl = highs[i] - lows[i] || 1;
@@ -292,11 +266,9 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (cmf >= -0.02) addVote('LONG', 'P4_VOLUME', '18.CMF');
   if (cmf <= 0.02) addVote('SHORT', 'P4_VOLUME', '18.CMF');
 
-  // 19. Wyckoff VSA (Volume Spread Analysis Spring / Upthrust)
   if (bullBar && (volRatio >= 0.9 || lowerWick > upperWick)) addVote('LONG', 'P4_VOLUME', '19.Wyckoff-VSA');
   if (bearBar && (volRatio >= 0.9 || upperWick > lowerWick)) addVote('SHORT', 'P4_VOLUME', '19.Wyckoff-VSA');
 
-  // 20. Institutional Volume Delta Confirmation
   let buyVol = 0, sellVol = 0;
   for (let i = n - 6; i < n; i++) {
     if (closes[i] >= opens[i]) buyVol += vols[i];
@@ -305,19 +277,14 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (buyVol >= sellVol) addVote('LONG', 'P4_VOLUME', '20.Vol-Delta');
   if (sellVol >= buyVol) addVote('SHORT', 'P4_VOLUME', '20.Vol-Delta');
 
-  // =========================================================================
-  // PILLAR 5: GEOMETRY, PATTERNS & VOLATILITY (5 Methods)
-  // =========================================================================
-  // 21. Fibonacci Golden Pocket (0.382 - 0.65 Zone)
+  // Pillar 5: Geometry & Patterns (5)
   if (fibFromHigh >= 0.32 && fibFromHigh <= 0.68 && bullBar) addVote('LONG', 'P5_PATTERNS', '21.Fib-Golden');
   if (fibFromLow >= 0.32 && fibFromLow <= 0.68 && bearBar) addVote('SHORT', 'P5_PATTERNS', '21.Fib-Golden');
 
-  // 22. Elliott Wave (Wave 3 / Wave 5 Impulse Alignment)
   const p0 = closes[n - 34], p1 = closes[n - 20], p2 = closes[n - 10];
   if (p1 > p0 && p2 > p0 && last >= p2) addVote('LONG', 'P5_PATTERNS', '22.Elliott-Wave');
   if (p1 < p0 && p2 < p0 && last <= p2) addVote('SHORT', 'P5_PATTERNS', '22.Elliott-Wave');
 
-  // 23. Chart Patterns (Higher-Low W Structure / Lower-High M Structure)
   const lowA = Math.min(...lows.slice(-28, -14));
   const lowB = Math.min(...lows.slice(-14, -1));
   const highA = Math.max(...highs.slice(-28, -14));
@@ -325,7 +292,6 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (lowB >= lowA * 0.992 && bullBar) addVote('LONG', 'P5_PATTERNS', '23.Pattern-W/Flag');
   if (highB <= highA * 1.008 && bearBar) addVote('SHORT', 'P5_PATTERNS', '23.Pattern-M/Flag');
 
-  // 24. Bollinger Bands (20, 2) Mean Walk
   const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
   const std20 = Math.sqrt(closes.slice(-20).reduce((a, c) => a + Math.pow(c - sma20, 2), 0) / 20);
   const bbUpper = sma20 + 2 * std20;
@@ -333,7 +299,6 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   if (last >= sma20 && last < bbUpper * 0.998) addVote('LONG', 'P5_PATTERNS', '24.Bollinger');
   if (last <= sma20 && last > bbLower * 1.002) addVote('SHORT', 'P5_PATTERNS', '24.Bollinger');
 
-  // 25. Keltner Channel + ATR Healthy Volatility
   const kcUpper = ema20 + 1.8 * atr;
   const kcLower = ema20 - 1.8 * atr;
   if (last >= ema20 && last <= kcUpper) addVote('LONG', 'P5_PATTERNS', '25.Keltner-ATR');
@@ -372,7 +337,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
     const atr = calcATRVal(highs, lows, closes, 14);
     const last = closes[closes.length - 1];
 
-    // Prevent chasing overextended candles (>2.6% away from EMA20)
     if (Math.abs(last - ema20) / ema20 > 0.026) return null;
 
     const { votes, pillars, volRatio } = evaluate25Methods(
@@ -384,7 +348,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
     else if (htfBear && votes.SHORT.length > votes.LONG.length) dir = 'SHORT';
     if (!dir) return null;
 
-    // Anti-exhaustion RSI guard
     if (dir === 'LONG' && (rsi < 40 || rsi > 66)) return null;
     if (dir === 'SHORT' && (rsi < 34 || rsi > 60)) return null;
 
@@ -392,11 +355,9 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
     const methodCount = matchedMethods.length;
     const activePillars = Object.keys(pillars).filter(p => pillars[p][dir] >= 2).length;
 
-    // Filter by specific pillar if user selected one, otherwise require strong 25-method confluence
     if (strategyMode !== 'ALL25' && strategyMode !== 'ALL') {
       if ((pillars[strategyMode]?.[dir] || 0) < 3) return null;
     } else {
-      // Must pass at least 14 out of 25 methods AND at least 4 out of 5 institutional pillars!
       if (methodCount < 14 || activePillars < 4) return null;
     }
 
@@ -491,8 +452,7 @@ async function confirmWithGemini(verifiedSetups, timeframe) {
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!geminiKey || verifiedSetups.length === 1) return best;
 
-  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix (SMC, ICT, Trend, Oscillators, Volume/VSA, Fibonacci/Patterns/Elliott).
-Timeframe: ${timeframe}.
+  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix. Timeframe: ${timeframe}.
 These setups have ALREADY passed at least 14/25 methods and 4/5 institutional pillars:
 ${JSON.stringify(verifiedSetups.slice(0, 4))}
 
@@ -507,7 +467,7 @@ Respond ONLY with raw JSON:
   "sl": 0.0,
   "tp": 0.0,
   "confidence": 92,
-  "reason": "2-sentence explanation of why this 25-method confluence setup is the safest trade right now."
+  "reason": "2-sentence explanation."
 }`;
 
   try {
