@@ -71,12 +71,46 @@ async function getMexcTickerMap() {
     (j.data || []).forEach(t => {
       map[t.symbol] = {
         lastPrice: Number(t.lastPrice || t.fairPrice || 0),
-        fairPrice: Number(t.fairPrice || t.lastPrice || 0)
+        fairPrice: Number(t.fairPrice || t.lastPrice || 0),
+        fundingRate: Number(t.fundingRate || 0),
+        bid1: Number(t.bid1 || t.lastPrice || 0),
+        ask1: Number(t.ask1 || t.lastPrice || 0)
       };
     });
     return map;
   } catch (e) {
     return {};
+  }
+}
+
+// UPDATE #3 & #9: Order Book Imbalance + Spread Guard
+async function checkOrderBookAndSpread(coin, dir) {
+  try {
+    const r = await fetch(`https://data-api.binance.vision/api/v3/depth?symbol=${coin}USDT&limit=20`);
+    if (!r.ok) return { ok: true, obRatio: 1, spreadPct: 0.02 };
+    const d = await r.json();
+    const bids = (d.bids || []).map(x => [+x[0], +x[1]]);
+    const asks = (d.asks || []).map(x => [+x[0], +x[1]]);
+    if (!bids.length || !asks.length) return { ok: true, obRatio: 1, spreadPct: 0.02 };
+
+    const bestBid = bids[0][0];
+    const bestAsk = asks[0][0];
+    const spreadPct = ((bestAsk - bestBid) / bestBid) * 100;
+
+    // Update #9: Block if Bid-Ask spread > 0.15%
+    if (spreadPct > 0.15) return { ok: false, reason: 'Spread too wide' };
+
+    const bidVol = bids.reduce((s, b) => s + b[0] * b[1], 0);
+    const askVol = asks.reduce((s, a) => s + a[0] * a[1], 0) || 1;
+    const obRatio = +(bidVol / askVol).toFixed(2);
+
+    // Update #3: Block LONG if massive Sell Wall (obRatio < 0.55), Block SHORT if massive Buy Wall (obRatio > 1.85)
+    if (dir === 'LONG' && obRatio < 0.55) return { ok: false, reason: 'Heavy Sell Wall Ahead' };
+    if (dir === 'SHORT' && obRatio > 1.85) return { ok: false, reason: 'Heavy Buy Wall Below' };
+
+    return { ok: true, obRatio, spreadPct: +spreadPct.toFixed(3) };
+  } catch (e) {
+    return { ok: true, obRatio: 1, spreadPct: 0.02 };
   }
 }
 
@@ -128,7 +162,6 @@ async function getBtcMarketRegime(tf = '15m') {
     const prev4 = closes[closes.length - 5] || last;
     const suddenMovePct = ((last - prev4) / prev4) * 100;
 
-    // Only block opposite side on extreme flash crash/pump (>1.6% in 1 hour)
     const btcDumping = suddenMovePct <= -1.6;
     const btcPumping = suddenMovePct >= 1.6;
 
@@ -340,7 +373,7 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   return { votes, pillars, volRatio };
 }
 
-async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime = { allowLong: true, allowShort: true, regime: 'BALANCED' }) {
+async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime = {}, fundingRate = 0, sniperRecovery = false) {
   const htf = tf === '15m' ? '1h' : tf === '1h' ? '4h' : '1d';
   try {
     const [rLtf, rHtf] = await Promise.all([
@@ -356,6 +389,7 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const highs = rawLtf.map(x => +x[2]);
     const lows = rawLtf.map(x => +x[3]);
     const vols = rawLtf.map(x => +x[5]);
+    const n = closes.length;
 
     const hCloses = rawHtf.map(x => +x[4]);
     const hEma20 = calcEMAVal(hCloses, 20);
@@ -368,9 +402,12 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const ema50 = calcEMAVal(closes, 50);
     const rsi = calcRSIVal(closes, 14);
     const atr = calcATRVal(highs, lows, closes, 14);
-    const last = closes[closes.length - 1];
+    const last = closes[n - 1];
 
-    // Allow up to 3.8% distance from EMA20 so strong bearish/bullish trends aren't skipped
+    // UPDATE #7: Anti-Spike Wick Filter (Reject abnormal 4%+ single-bar pump/dump spikes)
+    const lastBarRangePct = ((highs[n - 1] - lows[n - 1]) / last) * 100;
+    if (lastBarRangePct > 4.2) return null;
+
     if (Math.abs(last - ema20) / ema20 > 0.038) return null;
 
     const { votes, pillars } = evaluate25Methods(
@@ -382,12 +419,16 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     else if (votes.SHORT.length > votes.LONG.length && (htfBear || ema20 <= ema50)) dir = 'SHORT';
     if (!dir) return null;
 
+    // UPDATE #1: Funding Rate Whale Trap Filter
+    // Block LONG if funding rate is extremely positive (>0.08%), Block SHORT if extremely negative (<-0.08%)
+    if (dir === 'LONG' && fundingRate > 0.0008) return null;
+    if (dir === 'SHORT' && fundingRate < -0.0008) return null;
+
     if (coin !== 'BTC') {
       if (dir === 'LONG' && !btcRegime.allowLong) return null;
       if (dir === 'SHORT' && !btcRegime.allowShort) return null;
     }
 
-    // Safe RSI bounds that still catch strong momentum
     if (dir === 'LONG' && (rsi < 35 || rsi > 70)) return null;
     if (dir === 'SHORT' && (rsi < 27 || rsi > 65)) return null;
 
@@ -395,11 +436,19 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const methodCount = matchedMethods.length;
     const activePillars = Object.keys(pillars).filter(p => pillars[p][dir] >= 2).length;
 
+    // UPDATE #5: Loss-Streak Sniper Recovery Mode requires higher confluence
+    const reqMethods = sniperRecovery ? 14 : 12;
+    const reqPillars = sniperRecovery ? 4 : 3;
+
     if (strategyMode !== 'ALL25' && strategyMode !== 'ALL') {
       if ((pillars[strategyMode]?.[dir] || 0) < 3) return null;
     } else {
-      if (methodCount < 12 || activePillars < 3) return null;
+      if (methodCount < reqMethods || activePillars < reqPillars) return null;
     }
+
+    // UPDATE #3 & #9: Live Order Book Imbalance + Spread Check
+    const obCheck = await checkOrderBookAndSpread(coin, dir);
+    if (!obCheck.ok) return null;
 
     const confidence = Math.min(98, Math.round(64 + methodCount * 1.45));
     const atrPct = atr / last;
@@ -411,36 +460,37 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     const sl = +(dir === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
     const tp = +(dir === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
 
+    const fundPct = (fundingRate * 100).toFixed(3) + '%';
     const pillarSummary = `P1:${pillars.P1_SMC_ICT[dir]}/5 | P2:${pillars.P2_TREND[dir]}/5 | P3:${pillars.P3_MOMENTUM[dir]}/5 | P4:${pillars.P4_VOLUME[dir]}/5 | P5:${pillars.P5_PATTERNS[dir]}/5`;
 
     return {
       coin,
       direction: dir,
-      method: `25-Method Confluence (${methodCount}/25 · ${activePillars}/5 Pillars)`,
+      method: `25-Method Confluence (${methodCount}/25 · ${activePillars}/5 Pillars${sniperRecovery ? ' · 🎯SNIPER' : ''})`,
       matchedMethods,
-      indicators: `${pillarSummary} | BTC:${btcRegime.regime} | RSI:${rsi}`,
+      indicators: `${pillarSummary} | OB:${obCheck.obRatio}x | Fund:${fundPct} | RSI:${rsi}`,
       entry,
       sl,
       tp,
       rr: '1:2.2',
       confidence,
-      reason: `Passed ${methodCount}/25 methods across ${activePillars}/5 Pillars with BTC Regime (${btcRegime.regime}) & ${htf}+${tf} alignment.`
+      reason: `Passed ${methodCount}/25 methods, OrderBook (${obCheck.obRatio}x), Funding (${fundPct}), Spread (${obCheck.spreadPct}%) & BTC (${btcRegime.regime}).`
     };
   } catch (e) {
     return null;
   }
 }
 
-async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL25', useBtcFilter = true) {
-  const [r, cMap, btcRegime] = await Promise.all([
+async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL25', useBtcFilter = true, sniperRecovery = false) {
+  const [r, cMap, mexcTickers, btcRegime] = await Promise.all([
     fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
     getContractMap(),
+    getMexcTickerMap(),
     useBtcFilter ? getBtcMarketRegime(timeframe) : Promise.resolve({ regime: 'FILTER_OFF', allowLong: true, allowShort: true })
   ]);
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
 
-  // Scan top 60 liquid coins so smaller balances ($1-$10) always find affordable contracts
   const candidates = all
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
     .sort((a, b) => Number(b.quoteVolume) - Number(a.quoteVolume))
@@ -452,7 +502,8 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
       const chg = Number(t.priceChangePercent);
       const cInfo = cMap[sym] || { contractSize: 1, maxLeverage: 50 };
       const minContractUsdt = +(price * cInfo.contractSize).toFixed(2);
-      return { coin, symbol: sym, price, chgNum: chg, change24h: chg.toFixed(2) + '%', minContractUsdt };
+      const fundingRate = mexcTickers[sym]?.fundingRate || 0;
+      return { coin, symbol: sym, price, chgNum: chg, change24h: chg.toFixed(2) + '%', minContractUsdt, fundingRate };
     })
     .filter(c => c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 20)
     .slice(0, 30);
@@ -460,7 +511,9 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   const verified = [];
   for (let i = 0; i < candidates.length; i += 6) {
     const batch = candidates.slice(i, i + 6);
-    const res = await Promise.all(batch.map(c => analyzeCoin25Methods(c.coin, timeframe, strategyMode, btcRegime)));
+    const res = await Promise.all(
+      batch.map(c => analyzeCoin25Methods(c.coin, timeframe, strategyMode, btcRegime, c.fundingRate, sniperRecovery))
+    );
     res.forEach((setup, idx) => {
       if (setup) {
         setup.change24h = batch[idx].change24h;
@@ -495,8 +548,8 @@ async function confirmWithGemini(verifiedSetups, timeframe) {
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!geminiKey || verifiedSetups.length === 1) return best;
 
-  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix. Timeframe: ${timeframe}.
-These setups passed institutional confluence and the BTC Market Regime Filter:
+  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix + 10 Institutional Pro Filters. Timeframe: ${timeframe}.
+These setups passed all filters:
 ${JSON.stringify(verifiedSetups.slice(0, 4))}
 
 Pick the SINGLE SAFEST setup. Respond ONLY with raw JSON:
@@ -581,7 +634,7 @@ async function notifyTelegram(pick, exec, marginUsdt, source = 'WEB') {
   const token = process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
-  const text = `🤖🏆 25-METHOD AI TRADE (${source})\n` +
+  const text = `🤖🏆 25-METHOD + 10 PRO FILTERS (${source})\n` +
     `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
     `Confluence: ${pick.method}\n` +
     `Margin: $${marginUsdt.toFixed(2)} USDT (Size: $${exec.notional})\n` +
@@ -613,9 +666,9 @@ module.exports = async (req, res) => {
         ? Math.max(0.5, +(avail * 0.70).toFixed(2))
         : Math.min(25, Math.max(0.5, +(avail * 0.35).toFixed(2)));
 
-      const { setups, btcRegime } = await scanHighProbabilitySetups(autoMargin * 25, [], '15m', 'ALL25', true);
+      const { setups, btcRegime } = await scanHighProbabilitySetups(autoMargin * 25, [], '15m', 'ALL25', true, false);
       if (!setups.length || setups[0].confidence < 78) {
-        return res.status(200).json({ ok: true, status: 'No 25-method setup passed filter right now.', btcRegime });
+        return res.status(200).json({ ok: true, status: 'No setup passed filter right now.', btcRegime });
       }
       const pick = await confirmWithGemini(setups, '15m');
       const exec = await openFuturesPosition(pick, autoMargin, 18, true);
@@ -667,7 +720,7 @@ module.exports = async (req, res) => {
           pnl: rawPnl.toFixed(3),
           roe: roePct,
           liquidatePrice: p.liquidatePrice || 0,
-          openTime: p.createTime
+          openTime: p.createTime || Date.now()
         };
       });
 
@@ -710,24 +763,26 @@ module.exports = async (req, res) => {
       const timeframe = body.timeframe || '15m';
       const strategyMode = body.strategyMode || 'ALL25';
       const useBtcFilter = body.useBtcFilter !== false;
-      const excludeSymbols = (openPos || []).map(p => p.symbol);
+      const sniperRecovery = Boolean(body.sniperRecovery);
+      const cooldownCoins = Array.isArray(body.cooldownCoins) ? body.cooldownCoins : [];
+      const excludeSymbols = [...(openPos || []).map(p => p.symbol), ...cooldownCoins];
 
       const maxLookupLev = autoLeverage ? 25 : reqLeverage;
       const maxContractUsdt = Math.max(15, marginUsdt * maxLookupLev);
 
       const { setups, btcRegime } = await scanHighProbabilitySetups(
-        maxContractUsdt, excludeSymbols, timeframe, strategyMode, useBtcFilter
+        maxContractUsdt, excludeSymbols, timeframe, strategyMode, useBtcFilter, sniperRecovery
       );
 
       if (!setups.length || setups[0].confidence < 78) {
         return res.status(400).json({
-          error: `⏸️ 25-Method Shield (${btcRegime.regime}): No coin safely passes >=12/25 methods & 3/5 Pillars right now. Waiting for next cycle.`
+          error: `⏸️ 25-Method + 10 Pro Filters (${btcRegime.regime}): No coin safely passes right now. Waiting for next cycle.`
         });
       }
 
       const pick = await confirmWithGemini(setups, timeframe);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
-      await notifyTelegram(pick, exec, marginUsdt, '$10/DAY GOAL AGENT');
+      await notifyTelegram(pick, exec, marginUsdt, '10-UPGRADE PRO AGENT');
 
       return res.status(200).json({
         ok: true,
