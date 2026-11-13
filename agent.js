@@ -17,46 +17,48 @@ if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
 const savedCfg = ls.get('mexcAgentCfg', {
-  sec: '', stratMode: 'ALL25', margin: 1, autoLev: 'auto', lev: 10, tf: '15m',
-  maxOpen: 1, tpRoe: 25, slRoe: 25, trailRoe: 12, dailyLossLimit: 3, btcFilter: 'on'
+  sec: '', stratMode: 'ALL25', walletMode: 'grow10', margin: 3.5, autoLev: 'auto', lev: 20, tf: '15m',
+  dailyProfitGoal: 10, dailyLossLimit: 4, tpRoe: 30, trailRoe: 14, slRoe: 25
 });
 $('sec').value = savedCfg.sec || '';
 if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL25';
-$('margin').value = savedCfg.margin != null ? savedCfg.margin : 1;
+if ($('walletMode')) $('walletMode').value = savedCfg.walletMode || 'grow10';
+$('margin').value = savedCfg.margin != null ? savedCfg.margin : 3.5;
 $('autoLev').value = savedCfg.autoLev || 'auto';
-$('lev').value = savedCfg.lev || 10;
+$('lev').value = savedCfg.lev || 20;
 $('tf').value = savedCfg.tf || '15m';
-$('maxOpen').value = savedCfg.maxOpen || 1;
-$('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 25;
+$('dailyProfitGoal').value = savedCfg.dailyProfitGoal != null ? savedCfg.dailyProfitGoal : 10;
+$('dailyLossLimit').value = savedCfg.dailyLossLimit != null ? savedCfg.dailyLossLimit : 4;
+$('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 30;
+$('trailRoe').value = savedCfg.trailRoe != null ? savedCfg.trailRoe : 14;
 $('slRoe').value = savedCfg.slRoe != null ? savedCfg.slRoe : 25;
-$('trailRoe').value = savedCfg.trailRoe != null ? savedCfg.trailRoe : 12;
-$('dailyLossLimit').value = savedCfg.dailyLossLimit != null ? savedCfg.dailyLossLimit : 3;
-$('btcFilter').value = savedCfg.btcFilter || 'on';
 
-function toggleLevInput() {
+function toggleInputs() {
   $('lev').disabled = $('autoLev').value === 'auto';
   $('lev').style.opacity = $('autoLev').value === 'auto' ? '0.5' : '1';
+  $('margin').disabled = $('walletMode').value !== 'fixed';
+  $('margin').style.opacity = $('walletMode').value !== 'fixed' ? '0.5' : '1';
 }
-toggleLevInput();
+toggleInputs();
 
 const saveCfg = () => {
-  toggleLevInput();
+  toggleInputs();
   ls.set('mexcAgentCfg', {
     sec: $('sec').value.trim(),
     stratMode: $('stratMode') ? $('stratMode').value : 'ALL25',
-    margin: +$('margin').value || 1,
+    walletMode: $('walletMode').value,
+    margin: +$('margin').value || 3.5,
     autoLev: $('autoLev').value,
-    lev: +$('lev').value || 10,
+    lev: +$('lev').value || 20,
     tf: $('tf').value,
-    maxOpen: +$('maxOpen').value || 1,
-    tpRoe: +$('tpRoe').value || 0,
-    slRoe: +$('slRoe').value || 0,
-    trailRoe: +$('trailRoe').value || 0,
+    dailyProfitGoal: +$('dailyProfitGoal').value || 0,
     dailyLossLimit: +$('dailyLossLimit').value || 0,
-    btcFilter: $('btcFilter').value
+    tpRoe: +$('tpRoe').value || 0,
+    trailRoe: +$('trailRoe').value || 0,
+    slRoe: +$('slRoe').value || 0
   });
 };
-['sec', 'stratMode', 'margin', 'autoLev', 'lev', 'tf', 'maxOpen', 'tpRoe', 'slRoe', 'trailRoe', 'dailyLossLimit', 'btcFilter'].forEach(id => {
+['sec', 'stratMode', 'walletMode', 'margin', 'autoLev', 'lev', 'tf', 'dailyProfitGoal', 'dailyLossLimit', 'tpRoe', 'trailRoe', 'slRoe'].forEach(id => {
   if ($(id)) $(id).onchange = saveCfg;
 });
 
@@ -151,11 +153,22 @@ async function loadChartCoin(coin, levels = null) {
   } catch (e) {}
 }
 
-let autoPilot = false, closingIds = new Set(), isScanning = false, lastScanAttempt = 0;
+let autoPilot = false, closingIds = new Set(), isScanning = false, lastScanAttempt = 0, lastAvailBal = 10;
 let peakRoeMap = ls.get('mexcPeakRoe', {});
 let lastTrackedPositions = ls.get('mexcLastPos', {});
 
-// --- UPDATE #5: WIN-RATE & PROFIT ANALYTICS DASHBOARD ---
+function calcSmartMargin(availBal) {
+  const wMode = $('walletMode').value;
+  if (wMode === 'fixed') return Math.max(0.5, +$('margin').value || 3.5);
+  if (wMode === 'auto20') return Math.max(0.5, +(availBal * 0.20).toFixed(2));
+  if (wMode === 'grow10') {
+    // $10 Account Growth Mode: Uses 35% of live balance ($3.50 on $10, scales up automatically as profit grows)
+    return Math.max(0.5, +(availBal * 0.35).toFixed(2));
+  }
+  if (availBal <= 3) return Math.max(0.5, +(availBal * 0.70).toFixed(2));
+  return Math.max(0.5, +(availBal * 0.25).toFixed(2));
+}
+
 function recordClosedTrade(pos, exitReason) {
   const closed = ls.get('mexcClosedTrades', []);
   if (closed.some(c => c.positionId === pos.positionId)) return;
@@ -179,28 +192,26 @@ function renderAnalytics() {
   const todayStr = new Date().toDateString();
   const todayTrades = closed.filter(c => new Date(c.time).toDateString() === todayStr);
   const dailyPnl = todayTrades.reduce((s, c) => s + Number(c.pnl || 0), 0);
-
-  if (!closed.length) {
-    $('STATS').innerHTML = `<h3>📊 Update #5: AI Win-Rate &amp; Profit Analytics Dashboard</h3>
-      <p class="msg">Total Closed Trades: <b>0</b> · Today's Net PnL: <b>$0.000 USDT</b> (Stats update automatically when positions close)</p>`;
-    return { dailyPnl };
-  }
+  const goal = +$('dailyProfitGoal').value || 10;
+  const goalPct = goal > 0 ? Math.min(100, Math.max(0, (dailyPnl / goal) * 100)).toFixed(0) : 0;
 
   const wins = closed.filter(c => c.pnl > 0);
   const losses = closed.filter(c => c.pnl <= 0);
-  const winRate = ((wins.length / closed.length) * 100).toFixed(1);
+  const winRate = closed.length ? ((wins.length / closed.length) * 100).toFixed(1) : '0.0';
   const netPnl = closed.reduce((s, c) => s + Number(c.pnl || 0), 0);
 
-  $('STATS').innerHTML = `<h3>📊 Update #5: AI Win-Rate &amp; Profit Analytics Dashboard</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-top:8px">
+  $('STATS').innerHTML = `<h3>📊 Daily $${goal} USDT Profit Target &amp; Win-Rate Dashboard</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px">
+      <div style="background:rgba(46,204,154,0.08);padding:10px;border-radius:8px;border:1px solid #2ecc9a">
+        <small class="msg">Today's Goal ($${goal} USDT)</small><br>
+        <b class="${dailyPnl >= 0 ? 'up' : 'down'}" style="font-size:1.3em">${dailyPnl >= 0 ? '+' : ''}$${dailyPnl.toFixed(3)}</b><br>
+        <small>${goalPct}% of $${goal} Daily Target</small>
+      </div>
       <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
         <small class="msg">Win Rate %</small><br><b class="up" style="font-size:1.3em">${winRate}%</b><br><small>${wins.length}W / ${losses.length}L</small>
       </div>
       <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
-        <small class="msg">All-Time Net PnL</small><br><b class="${netPnl >= 0 ? 'up' : 'down'}" style="font-size:1.3em">${netPnl >= 0 ? '+' : ''}$${netPnl.toFixed(3)}</b><br><small>${closed.length} Trades</small>
-      </div>
-      <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
-        <small class="msg">Today's PnL</small><br><b class="${dailyPnl >= 0 ? 'up' : 'down'}" style="font-size:1.3em">${dailyPnl >= 0 ? '+' : ''}$${dailyPnl.toFixed(3)}</b><br><small>${todayTrades.length} Today</small>
+        <small class="msg">All-Time Net PnL</small><br><b class="${netPnl >= 0 ? 'up' : 'down'}" style="font-size:1.3em">${netPnl >= 0 ? '+' : ''}$${netPnl.toFixed(3)}</b><br><small>${closed.length} Closed</small>
       </div>
     </div>`;
   return { dailyPnl };
@@ -244,10 +255,10 @@ function renderLogs() {
     return;
   }
   renderAiBrain();
-  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>Matrix</th><th>Entry / SL / TP</th><th>Reason</th></tr>' +
+  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Margin</th><th>Matrix</th><th>Entry / SL / TP</th><th>Reason</th></tr>' +
     logs.map(l => `<tr>
       <td><small>${new Date(l.time).toLocaleTimeString()}</small></td>
-      <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span></td>
+      <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span><br><small>Margin: $${l.margin}</small></td>
       <td><b style="color:#f0b429">${l.method || ''}</b></td>
       <td>Entry: <b>${l.entry}</b><br><span class="down">SL: ${l.sl}</span><br><span class="up">TP: ${l.tp}</span></td>
       <td><small>${l.reason}</small></td>
@@ -278,30 +289,43 @@ async function closePositionApi(p, reasonLabel = 'Closed') {
   closingIds.delete(p.positionId);
 }
 
-// --- UPDATE #2: DAILY DRAWDOWN CIRCUIT BREAKER CHECK ---
-function isCircuitBreakerTripped() {
-  const limit = +$('dailyLossLimit').value || 0;
-  if (limit <= 0) return false;
+function isDailyGuardStopped() {
+  const profitGoal = +$('dailyProfitGoal').value || 0;
+  const lossLimit = +$('dailyLossLimit').value || 0;
   const { dailyPnl } = renderAnalytics();
-  if (dailyPnl <= -Math.abs(limit)) {
+
+  if (profitGoal > 0 && dailyPnl >= profitGoal) {
     if (autoPilot) {
       autoPilot = false;
-      $('autoToggleBtn').textContent = '🔄 Start Auto-Pilot (Sequential Loop): OFF';
+      $('autoToggleBtn').textContent = '🔄 Start Auto-Pilot ($10/Day Loop): OFF';
       $('autoToggleBtn').style.background = '#f0b429';
     }
     $('resetBreakerBtn').style.display = 'inline-block';
-    $('statusMsg').innerHTML = `<span class="down">🛑 CIRCUIT BREAKER TRIGGERED: Today's loss ($${dailyPnl.toFixed(2)}) hit your -$${limit} daily limit. Auto-Pilot paused for safety!</span>`;
+    $('statusMsg').innerHTML = `<span class="up">🎉 DAILY $10 PROFIT GOAL REACHED (+$${dailyPnl.toFixed(2)} / $${profitGoal} USDT)! Auto-Pilot paused to lock your profit!</span>`;
     return true;
   }
+
+  if (lossLimit > 0 && dailyPnl <= -Math.abs(lossLimit)) {
+    if (autoPilot) {
+      autoPilot = false;
+      $('autoToggleBtn').textContent = '🔄 Start Auto-Pilot ($10/Day Loop): OFF';
+      $('autoToggleBtn').style.background = '#f0b429';
+    }
+    $('resetBreakerBtn').style.display = 'inline-block';
+    $('statusMsg').innerHTML = `<span class="down">🛑 DAILY LOSS LIMIT HIT ($${dailyPnl.toFixed(2)} / -$${lossLimit} USDT). Auto-Pilot paused to protect your $10 wallet!</span>`;
+    return true;
+  }
+
   $('resetBreakerBtn').style.display = 'none';
   return false;
 }
 
 $('resetBreakerBtn').onclick = () => {
+  $('dailyProfitGoal').value = 0;
   $('dailyLossLimit').value = 0;
   saveCfg();
   $('resetBreakerBtn').style.display = 'none';
-  $('statusMsg').innerHTML = `<span class="up">🔓 Circuit Breaker reset. You may resume trading carefully.</span>`;
+  $('statusMsg').innerHTML = `<span class="up">🔓 Daily limits reset.</span>`;
 };
 
 async function refreshStatus() {
@@ -314,12 +338,13 @@ async function refreshStatus() {
     const d = await r.json();
     if (!r.ok || d.error) return;
 
+    lastAvailBal = Number(d.balance || 0);
+    const autoMarginPreview = calcSmartMargin(lastAvailBal).toFixed(2);
     const totPnl = Number(d.totalPnl || 0);
     const btcInfo = d.btcRegime ? ` · BTC: <b>${d.btcRegime.regime}</b>` : '';
-    $('BAL').innerHTML = `<h3>💼 MEXC Futures Account &amp; BTC Regime</h3>
-      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Equity: <b>$${d.equity}</b> &nbsp;|&nbsp; Live PnL: <b class="${totPnl >= 0 ? 'up' : 'down'}">${totPnl >= 0 ? '+' : ''}$${d.totalPnl} USDT</b>${btcInfo}</p>`;
+    $('BAL').innerHTML = `<h3>💼 MEXC Futures Account &amp; Smart Auto-Margin</h3>
+      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Next Trade Auto-Margin: <b style="color:#f0b429">$${autoMarginPreview} USDT</b> &nbsp;|&nbsp; Live PnL: <b class="${totPnl >= 0 ? 'up' : 'down'}">${totPnl >= 0 ? '+' : ''}$${d.totalPnl}</b>${btcInfo}</p>`;
 
-    // Detect positions closed natively on MEXC (SL/TP hit on exchange) and log to Analytics
     const currentIds = new Set(d.positions.map(p => p.positionId));
     Object.keys(lastTrackedPositions).forEach(oldId => {
       if (!currentIds.has(oldId) && !currentIds.has(Number(oldId))) {
@@ -344,14 +369,12 @@ async function refreshStatus() {
         ls.set('mexcPeakRoe', peakRoeMap);
       }
       const peak = Math.max(prevPeak, roeNum);
-
-      // Update #1: Dynamic Trailing Stop-Loss (Locks profit once peak >= trailActivate, closes if ROE drops 5% from peak)
-      const trailFloor = peak >= trailActivate && trailActivate > 0 ? Math.max(2, peak - 5) : null;
+      const trailFloor = peak >= trailActivate && trailActivate > 0 ? Math.max(3, peak - 5) : null;
 
       if (tpTarget > 0 && roeNum >= tpTarget) {
         await closePositionApi(p, `TP Target +${tpTarget}%`);
       } else if (trailFloor !== null && roeNum <= trailFloor) {
-        await closePositionApi(p, `Trailing SL Lock (Peak +${peak.toFixed(1)}% -> +${roeNum.toFixed(1)}%)`);
+        await closePositionApi(p, `Trailing SL Lock (+${peak.toFixed(1)}% -> +${roeNum.toFixed(1)}%)`);
       } else if (slLimit > 0 && roeNum <= -Math.abs(slLimit)) {
         await closePositionApi(p, `SL Guardian -${Math.abs(slLimit)}%`);
       }
@@ -359,25 +382,24 @@ async function refreshStatus() {
 
     if (!d.positions.length) {
       $('POS').innerHTML = `<h3>⚡ Live MEXC Futures Positions</h3><p class="msg">No open positions.</p>`;
-      // Sequential Auto-Pilot Loop: Only triggers next trade after previous trade is completely closed!
-      if (autoPilot && !isCircuitBreakerTripped() && !isScanning && (Date.now() - lastScanAttempt > 20000)) {
+      if (autoPilot && !isDailyGuardStopped() && !isScanning && (Date.now() - lastScanAttempt > 20000)) {
         runAgentTrade(true);
       }
     } else {
       const logs = ls.get('mexcAgentLogs', []);
       $('POS').innerHTML = `<h3>⚡ Live MEXC Futures Positions (Trailing SL &amp; Guardian Active)</h3>
         <table>
-          <tr><th>Contract</th><th>Side / Lev</th><th>Entry / Live</th><th>Peak ROE / Trail</th><th>PnL</th><th>Action</th></tr>
+          <tr><th>Contract</th><th>Side / Lev</th><th>Margin</th><th>Peak / Trail</th><th>Live PnL</th><th>Action</th></tr>
           ${d.positions.map(p => {
             const isProfit = Number(p.pnl) >= 0;
             const peak = Number(peakRoeMap[p.positionId] || p.roe);
             const trailActivate = +$('trailRoe').value || 0;
             const trailActive = trailActivate > 0 && peak >= trailActivate;
             return `<tr>
-              <td><b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" data-entry="${p.entryPrice}" data-dir="${p.direction}" style="color:#38bdf8">${p.symbol} 📈</a></b></td>
+              <td><b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" style="color:#38bdf8">${p.symbol} 📈</a></b><br><small>${p.entryPrice} → ${p.markPrice}</small></td>
               <td><span class="tag ${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction}</span> <b>${p.leverage}x</b></td>
-              <td>${p.entryPrice} / ${p.markPrice}</td>
-              <td>Peak: <b>${peak.toFixed(1)}%</b><br>${trailActive ? `<span class="tag up">🔒 Trail Locked (+${Math.max(2, peak - 5).toFixed(1)}%)</span>` : `<small class="msg">Locks at +${trailActivate}%</small>`}</td>
+              <td>$${p.margin}</td>
+              <td>Peak: <b>${peak.toFixed(1)}%</b><br>${trailActive ? `<span class="tag up">🔒 Locked</span>` : `<small class="msg">At +${trailActivate}%</small>`}</td>
               <td class="${isProfit ? 'up' : 'down'}"><b>${isProfit ? '+' : ''}$${p.pnl} (${isProfit ? '+' : ''}${p.roe}%)</b></td>
               <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" data-vol="${p.holdVol}" style="margin:0;padding:4px 8px">Close</button></td>
             </tr>`;
@@ -409,18 +431,18 @@ async function refreshStatus() {
 async function runAgentTrade(isAutoLoop = false) {
   const secret = $('sec').value.trim();
   if (!secret) { if (!isAutoLoop) alert('Enter Agent Password!'); return; }
-  if (isCircuitBreakerTripped()) return;
+  if (isDailyGuardStopped()) return;
   saveCfg();
 
   isScanning = true;
   lastScanAttempt = Date.now();
-  const marginVal = Math.max(0.5, +$('margin').value || 1);
+
+  const smartMargin = calcSmartMargin(lastAvailBal);
   const isAutoLev = $('autoLev').value === 'auto';
   const stratMode = $('stratMode') ? $('stratMode').value : 'ALL25';
-  const useBtcFilter = $('btcFilter').value === 'on';
 
   if (!isAutoLoop) $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Scanning 25 Methods + BTC Regime Filter for safest setup...</b>`;
+  $('statusMsg').innerHTML = `🤖 <b>Auto-Managing ($${smartMargin} USDT) &amp; Scanning 25 Methods for $10/Day Target...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -430,19 +452,19 @@ async function runAgentTrade(isAutoLoop = false) {
         action: 'scan_and_trade',
         secret,
         strategyMode: stratMode,
-        useBtcFilter,
-        marginUsdt: marginVal,
+        marginUsdt: smartMargin,
         autoLeverage: isAutoLev,
-        leverage: +$('lev').value || 10,
+        leverage: +$('lev').value || 20,
         timeframe: $('tf').value,
-        maxOpen: +$('maxOpen').value || 1
+        maxOpen: 1
       })
     });
     const d = await r.json();
     if (!r.ok || d.error) {
       $('statusMsg').innerHTML = `<span class="down">${d.error}</span>`;
     } else {
-      const usedLev = d.exec.leverage || 10;
+      const usedLev = d.exec.leverage || 20;
+      const usedMargin = d.usedMargin || smartMargin;
       const logs = ls.get('mexcAgentLogs', []);
       logs.unshift({
         time: Date.now(),
@@ -453,7 +475,7 @@ async function runAgentTrade(isAutoLoop = false) {
         indicators: d.pick.indicators,
         topCandidates: d.pick.topCandidates,
         leverage: usedLev,
-        margin: marginVal,
+        margin: usedMargin,
         entry: d.pick.entry,
         sl: d.pick.sl,
         tp: d.pick.tp,
@@ -463,7 +485,7 @@ async function runAgentTrade(isAutoLoop = false) {
       ls.set('mexcAgentLogs', logs.slice(0, 50));
       renderLogs();
       loadChartCoin(d.pick.coin, d.pick);
-      $('statusMsg').innerHTML = `<span class="up">✅ Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x)!</span>`;
+      $('statusMsg').innerHTML = `<span class="up">✅ Executed ${d.pick.direction} on ${d.pick.coin}_USDT ($${usedMargin} @ ${usedLev}x)!</span>`;
       await refreshStatus();
     }
   } catch (e) {
@@ -478,7 +500,7 @@ $('refreshBtn').onclick = refreshStatus;
 
 $('autoToggleBtn').onclick = () => {
   autoPilot = !autoPilot;
-  $('autoToggleBtn').textContent = `🔄 Start Auto-Pilot (Sequential Loop): ${autoPilot ? 'ON (Active)' : 'OFF'}`;
+  $('autoToggleBtn').textContent = `🔄 Start Auto-Pilot ($10/Day Loop): ${autoPilot ? 'ON (Active)' : 'OFF'}`;
   $('autoToggleBtn').style.background = autoPilot ? '#2ecc9a' : '#f0b429';
   if (autoPilot) {
     lastScanAttempt = 0;
