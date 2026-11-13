@@ -10,7 +10,7 @@
 <header class="top">
   <div class="row">
     <button id="menuBtn" aria-label="Menu">&#9776;</button>
-    <b>🤖 AI Futures Trading Agent (MEXC)</b>
+    <b>🤖 AI Futures Trading Agent (MEXC 25-Method Engine)</b>
     <div class="clock"><div id="time"></div><div id="date"></div></div>
   </div>
 </header>
@@ -31,20 +31,19 @@
 <main>
   <!-- MEXC Account & Agent Controls -->
   <section class="card" style="margin-bottom:12px">
-    <h3>⚙️ MEXC Futures AI Agent Control Panel (6-Method Pro Engine)</h3>
+    <h3>⚙️ MEXC Futures AI Agent Control Panel (25-Method 5-Pillar Matrix)</h3>
     <div class="rin" style="margin-top:8px">
       <label>Agent Password (AGENT_SECRET)
         <input id="sec" type="password" placeholder="Enter secret key">
       </label>
-      <label>🧠 Trading Strategy (Top 6 Methods)
+      <label>🧠 Trading Strategy (25-Method Matrix)
         <select id="stratMode" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #2ecc9a;border-radius:8px;padding:8px;font-weight:700">
-          <option value="ALL" selected>🔥 All 6 Methods Master Confluence (Recommended)</option>
-          <option value="SMC">1. SMC (Order Block + BOS + Liquidity Sweep)</option>
-          <option value="ICT">2. ICT (Fair Value Gap FVG + OTE Zone)</option>
-          <option value="FIB">3. Fibonacci Golden Pocket (0.5 - 0.618)</option>
-          <option value="PAT">4. Chart Patterns (Double Top/Bottom &amp; Flags)</option>
-          <option value="ELLIOTT">5. Elliott Wave (Wave 3 &amp; 5 Impulse)</option>
-          <option value="VSA">6. Wyckoff &amp; VSA (Institutional Volume Spring)</option>
+          <option value="ALL25" selected>🏆 All 25 Methods Master Confluence (Min 14/25 + 4/5 Pillars)</option>
+          <option value="P1_SMC_ICT">Pillar 1: Smart Money &amp; ICT (OB, BOS, FVG, OTE, Sweep)</option>
+          <option value="P2_TREND">Pillar 2: Trend Matrix (MTF EMA, SuperTrend, Ichimoku, ADX, PSAR)</option>
+          <option value="P3_MOMENTUM">Pillar 3: Oscillators (RSI, MACD, Stoch, CCI, Williams %R)</option>
+          <option value="P4_VOLUME">Pillar 4: Volume &amp; Order Flow (VWAP, OBV, CMF, Wyckoff VSA, Delta)</option>
+          <option value="P5_PATTERNS">Pillar 5: Geometry &amp; Patterns (Fib 0.618, Elliott Wave, W/M, BB, Keltner)</option>
         </select>
       </label>
       <label>Margin per Trade (USDT - Min $0.50)
@@ -79,7 +78,7 @@
 
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
       <button id="runOnceBtn" class="moreBtn" style="background:#2ecc9a;color:#0e1621;font-weight:700;margin:0">
-        🚀 Scan Top 30 (6 Methods) &amp; Execute AI Trade
+        🚀 Scan Top 30 (All 25 Methods) &amp; Execute AI Trade
       </button>
       <button id="autoToggleBtn" class="moreBtn" style="background:#f0b429;color:#0e1621;font-weight:700;margin:0">
         🔄 Start 24/7 Auto-Pilot: OFF
@@ -101,10 +100,10 @@
     <p class="msg">No active positions loaded yet.</p>
   </section>
 
-  <!-- Latest AI Method & Technical Breakdown Card -->
+  <!-- Latest AI 25-Method & Technical Breakdown Card -->
   <section class="card" id="AI_BRAIN" style="margin-bottom:12px">
-    <h3>🧠 Latest AI 6-Method Deep Analysis &amp; Top 3 Radar</h3>
-    <p class="msg">Run a scan to see which of the 6 Institutional Methods (SMC / ICT / Fibonacci / Patterns / Elliott Wave / Wyckoff VSA) triggered the trade.</p>
+    <h3>🧠 Latest AI 25-Method Confluence Breakdown &amp; Top 3 Radar</h3>
+    <p class="msg">Run a scan to see which of the 25 Institutional Methods across the 5 Pillars triggered the trade.</p>
   </section>
 
   <!-- Live Trend Detection Chart -->
@@ -119,7 +118,7 @@
 
   <!-- AI Agent Execution History Log -->
   <section class="card" id="LOG">
-    <h3>📜 AI Agent Trade Log (6-Method Executed History)</h3>
+    <h3>📜 AI Agent Trade Log (25-Method Executed History)</h3>
     <div id="logList"><p class="msg">No trades executed by AI Agent in this session yet.</p></div>
   </section>
 </main>
