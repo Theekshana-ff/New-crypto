@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AI Futures Trading Agent (10 Pro Upgrades)</title>
+  <title>AI 100-Coin Auto Futures Agent ($5/Day + 90% Profit Lock)</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="row">
     <button id="menuBtn" aria-label="Menu">&#9776;</button>
-    <b>🤖 AI Futures Agent (25-Methods + 10 Pro Upgrades)</b>
+    <b>🤖 AI 100-Coin Auto Trader ($5/Day · 90% Profit Lock)</b>
     <div class="clock"><div id="time"></div><div id="date"></div></div>
   </div>
 </header>
@@ -29,123 +29,111 @@
 </nav>
 
 <main>
-  <!-- Control Panel -->
+  <!-- 1. LIVE MEXC FUTURES WALLET & REAL-TIME PROFIT/LOSS BANNER -->
+  <section class="card" id="WALLET_BAR" style="margin-bottom:12px;border:1px solid #2ecc9a">
+    <h3>💼 MEXC Futures Live Wallet &amp; Real-Time PnL</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-top:8px">
+      <div style="background:rgba(46,204,154,0.08);padding:10px;border-radius:8px;border:1px solid #2ecc9a">
+        <small class="msg">Wallet Available USDT</small><br>
+        <b id="wBal" class="up" style="font-size:1.35em">$0.00</b>
+      </div>
+      <div style="background:rgba(56,189,248,0.08);padding:10px;border-radius:8px;border:1px solid #38bdf8">
+        <small class="msg">Total Account Equity</small><br>
+        <b id="wEq" style="font-size:1.35em">$0.00</b>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
+        <small class="msg">Live Open Profit / Loss</small><br>
+        <b id="wPnl" style="font-size:1.35em">$0.0000</b>
+      </div>
+      <div style="background:rgba(240,180,41,0.08);padding:10px;border-radius:8px;border:1px solid #f0b429">
+        <small class="msg">Today's Realized Profit</small><br>
+        <b id="wDaily" class="up" style="font-size:1.35em">$0.000 / $5.00</b>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. AI AGENT CONTROL PANEL -->
   <section class="card" style="margin-bottom:12px">
-    <h3>⚙️ MEXC Futures AI Agent Control Panel ($10/Day + 10 Institutional Upgrades)</h3>
+    <h3>⚙️ 100-Coin AI Agent Settings (90% Profit Lock &amp; 10% Loss Shield)</h3>
     <div class="rin" style="margin-top:8px">
       <label>Agent Password (AGENT_SECRET)
         <input id="sec" type="password" placeholder="Enter secret key">
       </label>
-      <label>🧠 Trading Strategy (25-Method Matrix)
-        <select id="stratMode" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #2ecc9a;border-radius:8px;padding:8px;font-weight:700">
-          <option value="ALL25" selected>🏆 All 25 Methods Master Confluence (Recommended)</option>
-          <option value="P1_SMC_ICT">Pillar 1: Smart Money &amp; ICT (OB, BOS, FVG, OTE, Sweep)</option>
-          <option value="P2_TREND">Pillar 2: Trend Matrix (MTF EMA, SuperTrend, Ichimoku, ADX, PSAR)</option>
-          <option value="P3_MOMENTUM">Pillar 3: Oscillators (RSI, MACD, Stoch, CCI, Williams %R)</option>
-          <option value="P4_VOLUME">Pillar 4: Volume &amp; Order Flow (VWAP, OBV, CMF, Wyckoff VSA, Delta)</option>
-          <option value="P5_PATTERNS">Pillar 5: Geometry &amp; Patterns (Fib 0.618, Elliott Wave, W/M, BB, Keltner)</option>
+      <label>💰 Margin Mode (Auto Wallet Management)
+        <select id="autoMargin" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #2ecc9a;border-radius:8px;padding:8px;font-weight:700">
+          <option value="auto" selected>⚡ Auto-Manage Margin (35% of Wallet Balance)</option>
+          <option value="manual">✋ Fixed Manual Margin</option>
         </select>
       </label>
-      <label>💰 Wallet Money Management Mode
-        <select id="walletMode" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #f0b429;border-radius:8px;padding:8px;font-weight:700">
-          <option value="grow10" selected>🚀 $10 Account Growth (35% Auto + Win-Streak Booster)</option>
-          <option value="compound1">🌱 $1-$3 Micro-Account Compounding (70% Auto)</option>
-          <option value="auto20">⚡ Conservative Auto-Scale (20% of Wallet)</option>
-          <option value="fixed">✋ Fixed USDT Margin</option>
-        </select>
+      <label>Manual Margin (USDT)
+        <input id="margin" type="number" min="0.5" step="0.5" value="2">
       </label>
-      <label>Fixed Margin (USDT - if Fixed Mode)
-        <input id="margin" type="number" min="0.5" step="0.5" value="3.5">
-      </label>
-      <label>Leverage Mode
+      <label>⚡ Leverage Mode
         <select id="autoLev" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">
-          <option value="auto" selected>⚡ Auto-Smart Leverage (12x - 20x Safe)</option>
+          <option value="auto" selected>⚡ Auto-Select Leverage (12x - 20x by Score)</option>
           <option value="manual">✋ Manual Leverage</option>
         </select>
       </label>
       <label>Manual Leverage (x)
-        <input id="lev" type="number" min="1" max="50" value="20">
+        <input id="lev" type="number" min="1" max="50" value="15">
       </label>
-      <label>Scan Timeframe
+      <label>🎯 Daily Profit Target (USDT)
+        <input id="dailyGoal" type="number" min="1" step="0.5" value="5">
+      </label>
+      <label>🔒 Peak Profit Lock Retention (%)
+        <input id="lockRetention" type="number" min="50" max="95" step="5" value="90" title="Locks 90% of peak profit if price drops 10% from peak">
+      </label>
+      <label>🛡️ Emergency Max Loss Cut (ROE -%)
+        <input id="maxLossRoe" type="number" min="5" max="50" step="1" value="10" title="Closes immediately at -10% ROE to save 90% of your margin">
+      </label>
+      <label>🎯 Full Take-Profit Target (ROE %)
+        <input id="tpRoe" type="number" min="5" max="200" step="5" value="35">
+      </label>
+      <label>⏱️ Scan Timeframe
         <select id="tf" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">
-          <option value="15m" selected>15m + 1h MTF (Intraday Fast Compounding)</option>
-          <option value="1h">1h + 4h MTF (Swing)</option>
-          <option value="4h">4h + 1d MTF (Major Trend)</option>
+          <option value="15m" selected>15m (Fast Intraday Compounding)</option>
+          <option value="1h">1h (High Accuracy Swing)</option>
         </select>
-      </label>
-      <label>🎯 Daily Profit Target Auto-Stop (USDT)
-        <input id="dailyProfitGoal" type="number" min="0" step="1" value="10" placeholder="0 = Off">
-      </label>
-      <label>🛑 Daily Max Loss Circuit Breaker (USDT)
-        <input id="dailyLossLimit" type="number" min="0" step="0.5" value="4" placeholder="0 = Off">
-      </label>
-      <label>🛡️ Single Trade Take Profit (ROE %)
-        <input id="tpRoe" type="number" min="0" step="5" value="30" placeholder="0 = Off">
-      </label>
-      <label>💰 Partial TP1 50% Lock (ROE %)
-        <input id="partialTpRoe" type="number" min="0" step="2" value="18" placeholder="0 = Off">
-      </label>
-      <label>🔒 Trailing Stop Profit Lock (ROE %)
-        <input id="trailRoe" type="number" min="0" step="2" value="14" placeholder="0 = Off">
-      </label>
-      <label>🛡️ Auto Break-Even Shield (ROE %)
-        <input id="beRoe" type="number" min="0" step="1" value="6" placeholder="0 = Off">
-      </label>
-      <label>🛡️ Single Trade Stop Loss (ROE -%)
-        <input id="slRoe" type="number" min="0" step="5" value="25" placeholder="0 = Off">
       </label>
     </div>
 
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
-      <button id="runOnceBtn" class="moreBtn" style="background:#2ecc9a;color:#0e1621;font-weight:700;margin:0">
-        🚀 Scan Top 30 &amp; Execute AI Trade
+      <button id="autoToggleBtn" class="moreBtn" style="background:#2ecc9a;color:#0e1621;font-weight:700;margin:0">
+        ▶️ Start 100-Coin Auto-Pilot: OFF
       </button>
-      <button id="autoToggleBtn" class="moreBtn" style="background:#f0b429;color:#0e1621;font-weight:700;margin:0">
-        🔄 Start Auto-Pilot ($10/Day Loop): OFF
+      <button id="runOnceBtn" class="moreBtn" style="background:#38bdf8;color:#0e1621;font-weight:700;margin:0">
+        🔍 Scan 100 Coins &amp; Open Best Trade Now
       </button>
-      <button id="refreshBtn" class="moreBtn" style="margin:0">↻ Refresh Live PnL</button>
-      <button id="resetBreakerBtn" class="moreBtn" style="margin:0;display:none;background:#ff5d5d;color:#fff">🔓 Reset Daily Stop</button>
+      <button id="refreshBtn" class="moreBtn" style="margin:0">↻ Refresh Live Wallet</button>
     </div>
-    <p id="statusMsg" class="msg" style="margin-top:8px">Enter your Agent Password and click Refresh or Start Auto-Pilot.</p>
+    <p id="statusMsg" class="msg" style="margin-top:8px">Enter your Agent Password and click Start 100-Coin Auto-Pilot.</p>
   </section>
 
-  <!-- MEXC Futures Balance Summary -->
-  <section class="card" id="BAL" style="margin-bottom:12px">
-    <h3>💼 MEXC Futures Account &amp; Smart Auto-Margin</h3>
-    <p class="msg">Connect with your Agent Password to view live USDT balance.</p>
-  </section>
-
-  <!-- Win-Rate, Daily $10 Goal Progress & Analytics Dashboard -->
-  <section class="card" id="STATS" style="margin-bottom:12px">
-    <h3>📊 Daily $10 USDT Profit Target, Streak &amp; Win-Rate Dashboard</h3>
-    <p class="msg">Completed trades will appear here automatically.</p>
-  </section>
-
-  <!-- Live Open Positions & Profit/Loss Tracker -->
+  <!-- 3. ACTIVE POSITION & 90% PROFIT LOCK GUARDIAN -->
   <section class="card" id="POS" style="margin-bottom:12px">
-    <h3>⚡ Live MEXC Futures Positions (Break-Even, Partial TP1 &amp; Trailing SL Active)</h3>
-    <p class="msg">No active positions loaded yet.</p>
+    <h3>⚡ Active Futures Trade (Live Profit, Peak Profit &amp; 90% Lock Floor)</h3>
+    <p class="msg">No open position right now.</p>
   </section>
 
-  <!-- Latest AI 25-Method & Technical Breakdown Card -->
-  <section class="card" id="AI_BRAIN" style="margin-bottom:12px">
-    <h3>🧠 Latest AI 25-Method Confluence Breakdown &amp; Top 3 Radar</h3>
-    <p class="msg">Run a scan to see the 25-method analysis.</p>
+  <!-- 4. 100-COIN SCANNER RADAR -->
+  <section class="card" id="RADAR" style="margin-bottom:12px">
+    <h3>📡 100-Coin AI Scanner Top Picks</h3>
+    <p class="msg">Run a scan to see the top-ranked coins out of 100 MEXC Futures pairs.</p>
   </section>
 
-  <!-- Live Trend Detection Chart -->
+  <!-- 5. LIVE CHART -->
   <section class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
-      <h3 id="chartHeader" style="margin:0">📈 Live AI Trend &amp; Position Chart (BTC/USDT)</h3>
-      <div id="trendBadge" class="badge">Detecting Trend...</div>
+      <h3 id="chartHeader" style="margin:0">📈 Live AI Trade Chart (BTC/USDT)</h3>
+      <div id="trendBadge" class="badge">Live Feed</div>
     </div>
-    <div id="agentChart" style="width:100%;height:360px;border-radius:8px;overflow:hidden"></div>
+    <div id="agentChart" style="width:100%;height:340px;border-radius:8px;overflow:hidden"></div>
   </section>
 
-  <!-- AI Agent Execution History Log -->
+  <!-- 6. CLOSED TRADES & PROFIT LOG -->
   <section class="card" id="LOG">
-    <h3>📜 AI Agent Trade Log</h3>
-    <div id="logList"><p class="msg">No trades executed yet.</p></div>
+    <h3>📜 Closed Trades &amp; Wallet Profit History</h3>
+    <div id="logList"><p class="msg">No trades completed yet.</p></div>
   </section>
 </main>
 
