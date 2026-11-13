@@ -17,7 +17,7 @@ if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
 const savedCfg = ls.get('mexcAgentCfg', {
-  sec: '', stratMode: 'ALL25', margin: 1, autoLev: 'auto', lev: 10, tf: '15m', maxOpen: 2, tpRoe: 20, slRoe: 25
+  sec: '', stratMode: 'ALL25', margin: 1, autoLev: 'auto', lev: 10, tf: '15m', maxOpen: 1, tpRoe: 20, slRoe: 25
 });
 $('sec').value = savedCfg.sec || '';
 if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL25';
@@ -25,7 +25,7 @@ $('margin').value = savedCfg.margin != null ? savedCfg.margin : 1;
 $('autoLev').value = savedCfg.autoLev || 'auto';
 $('lev').value = savedCfg.lev || 10;
 $('tf').value = savedCfg.tf || '15m';
-$('maxOpen').value = savedCfg.maxOpen || 2;
+$('maxOpen').value = savedCfg.maxOpen || 1;
 $('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 20;
 $('slRoe').value = savedCfg.slRoe != null ? savedCfg.slRoe : 25;
 
@@ -44,7 +44,7 @@ const saveCfg = () => {
     autoLev: $('autoLev').value,
     lev: +$('lev').value || 10,
     tf: $('tf').value,
-    maxOpen: +$('maxOpen').value || 2,
+    maxOpen: +$('maxOpen').value || 1,
     tpRoe: +$('tpRoe').value || 0,
     slRoe: +$('slRoe').value || 0
   });
@@ -53,7 +53,6 @@ const saveCfg = () => {
   if ($(id)) $(id).onchange = saveCfg;
 });
 
-// --- LIVE TREND CHART ---
 let chart, candleSeries, ema20Series, ema50Series, priceLines = [];
 let currentChartCoin = 'BTC', currentLevels = null;
 
@@ -115,11 +114,11 @@ async function loadChartCoin(coin, levels = null) {
 
     $('chartHeader').textContent = `📈 Live AI Trend & Position Chart (${currentChartCoin}/USDT · ${tf})`;
     if (isBull) {
-      $('trendBadge').innerHTML = `<span class="tag up">🔥 LIVE TREND: STRONG BULLISH (UPTREND)</span>`;
+      $('trendBadge').innerHTML = `<span class="tag up">🔥 LIVE TREND: STRONG BULLISH</span>`;
     } else if (isBear) {
-      $('trendBadge').innerHTML = `<span class="tag down">🔥 LIVE TREND: STRONG BEARISH (DOWNTREND)</span>`;
+      $('trendBadge').innerHTML = `<span class="tag down">🔥 LIVE TREND: STRONG BEARISH</span>`;
     } else {
-      $('trendBadge').innerHTML = `<span class="tag">⚖️ LIVE TREND: CONSOLIDATING / PULLBACK ZONE</span>`;
+      $('trendBadge').innerHTML = `<span class="tag">⚖️ LIVE TREND: CONSOLIDATING</span>`;
     }
 
     priceLines.forEach(l => candleSeries.removePriceLine(l));
@@ -127,17 +126,17 @@ async function loadChartCoin(coin, levels = null) {
     if (currentLevels && currentLevels.coin === currentChartCoin) {
       if (currentLevels.entry) {
         priceLines.push(candleSeries.createPriceLine({
-          price: +currentLevels.entry, color: '#38bdf8', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: `ENTRY (${currentLevels.direction})`
+          price: +currentLevels.entry, color: '#38bdf8', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: `ENTRY`
         }));
       }
       if (currentLevels.sl) {
         priceLines.push(candleSeries.createPriceLine({
-          price: +currentLevels.sl, color: '#ff5d5d', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'STOP LOSS'
+          price: +currentLevels.sl, color: '#ff5d5d', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'SL'
         }));
       }
       if (currentLevels.tp) {
         priceLines.push(candleSeries.createPriceLine({
-          price: +currentLevels.tp, color: '#2ecc9a', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'TAKE PROFIT'
+          price: +currentLevels.tp, color: '#2ecc9a', lineWidth: 2, lineStyle: 2, axisLabelVisible: true, title: 'TP'
         }));
       }
     }
@@ -160,20 +159,19 @@ function renderAiBrain() {
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
       <div style="background:rgba(56,189,248,0.08);border:1px solid #38bdf8;border-radius:8px;padding:10px">
         <b>🎯 Selected Trade: ${latest.coin}_USDT <span class="tag ${latest.direction === 'LONG' ? 'up' : 'down'}">${latest.direction} (${latest.leverage}x)</span></b>
-        <p style="margin:6px 0"><b>🏆 Confluence Score:</b> <span style="color:#f0b429;font-weight:700">${latest.method || '25-Method Matrix'}</span></p>
-        <p style="margin:6px 0"><b>📊 5-Pillar Breakdown:</b> <small>${latest.indicators || ''}</small></p>
+        <p style="margin:6px 0"><b>🏆 Confluence Score:</b> <span style="color:#f0b429;font-weight:700">${latest.method || '25-Method'}</span></p>
+        <p style="margin:6px 0"><b>📊 Pillars:</b> <small>${latest.indicators || ''}</small></p>
         ${badges ? `<div style="margin:6px 0">${badges}</div>` : ''}
         <p style="margin:6px 0"><small>${latest.reason}</small></p>
       </div>
       <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:8px;padding:10px">
-        <b>🏆 Top 3 Coins Ranked from 25-Method Scan:</b>
-        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Confluence</th><th>Score</th></tr>` +
+        <b>🏆 Top 3 Coins:</b>
+        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Score</th></tr>` +
           radar.map((c, idx) => `<tr>
             <td>#${idx + 1}</td>
             <td><b>${c.coin}</b> <span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td>
-            <td><small>${c.method || '25-Method'}</small></td>
             <td><b>${c.confidence}%</b></td>
-          </tr>`).join('') + `</table>` : '<p class="msg">Radar data available on next scan.</p>'}
+          </tr>`).join('') + `</table>` : '<p class="msg">No radar data.</p>'}
       </div>
     </div>`;
 }
@@ -181,17 +179,17 @@ function renderAiBrain() {
 function renderLogs() {
   const logs = ls.get('mexcAgentLogs', []);
   if (!logs.length) {
-    $('logList').innerHTML = '<p class="msg">No trades executed by AI Agent yet.</p>';
+    $('logList').innerHTML = '<p class="msg">No trades executed yet.</p>';
     return;
   }
   renderAiBrain();
-  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>25-Method Matrix</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
+  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>Matrix</th><th>Entry / SL / TP</th><th>Reason</th></tr>' +
     logs.map(l => `<tr>
-      <td><small>${new Date(l.time).toLocaleString()}</small></td>
-      <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span><br><small>Margin: $${l.margin}</small></td>
-      <td><b style="color:#f0b429">${l.method || '25-Method Matrix'}</b><br><small class="msg">${l.indicators || ''}</small></td>
+      <td><small>${new Date(l.time).toLocaleTimeString()}</small></td>
+      <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span></td>
+      <td><b style="color:#f0b429">${l.method || ''}</b></td>
       <td>Entry: <b>${l.entry}</b><br><span class="down">SL: ${l.sl}</span><br><span class="up">TP: ${l.tp}</span></td>
-      <td><small>${l.reason} (Score: ${l.confidence}%)</small></td>
+      <td><small>${l.reason}</small></td>
     </tr>`).join('') + '</table>';
 }
 
@@ -212,7 +210,7 @@ async function closePositionApi(p, reasonLabel = '') {
       })
     });
     if (reasonLabel) {
-      $('statusMsg').innerHTML = `<span class="up">🛡️ Auto-Guardian Closed ${p.symbol} (${reasonLabel} at ${p.roe}% ROE)!</span>`;
+      $('statusMsg').innerHTML = `<span class="up">🛡️ Guardian Closed ${p.symbol} (${reasonLabel} at ${p.roe}% ROE)!</span>`;
     }
   } catch (e) {}
   closingIds.delete(p.positionId);
@@ -226,48 +224,42 @@ async function refreshStatus() {
   try {
     const r = await fetch(`/api/futures-agent?action=status&secret=${encodeURIComponent(secret)}`);
     const d = await r.json();
-    if (!r.ok || d.error) {
-      $('statusMsg').innerHTML = `<span class="down">⚠ ${d.error || 'Connection failed'}</span>`;
-      return;
-    }
+    if (!r.ok || d.error) return;
 
     const totPnl = Number(d.totalPnl || 0);
     $('BAL').innerHTML = `<h3>💼 MEXC Futures Account</h3>
-      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Total Equity: <b>$${d.equity}</b> &nbsp;|&nbsp; Total Unrealized PnL: <b class="${totPnl >= 0 ? 'up' : 'down'}">${totPnl >= 0 ? '+' : ''}$${d.totalPnl} USDT</b> &nbsp;|&nbsp; Open Positions: <b>${d.positions.length}</b></p>`;
+      <p>Available USDT: <b class="up">$${d.balance}</b> &nbsp;|&nbsp; Equity: <b>$${d.equity}</b> &nbsp;|&nbsp; PnL: <b class="${totPnl >= 0 ? 'up' : 'down'}">${totPnl >= 0 ? '+' : ''}$${d.totalPnl} USDT</b> &nbsp;|&nbsp; Open: <b>${d.positions.length}</b></p>`;
 
     const tpTarget = +$('tpRoe').value || 0;
     const slLimit = +$('slRoe').value || 0;
     for (const p of d.positions) {
       const roeNum = Number(p.roe);
       if (tpTarget > 0 && roeNum >= tpTarget) {
-        await closePositionApi(p, `Take-Profit Target +${tpTarget}%`);
+        await closePositionApi(p, `TP Target +${tpTarget}%`);
       } else if (slLimit > 0 && roeNum <= -Math.abs(slLimit)) {
-        await closePositionApi(p, `Stop-Loss Guardian -${Math.abs(slLimit)}%`);
+        await closePositionApi(p, `SL Guardian -${Math.abs(slLimit)}%`);
       }
     }
 
     if (!d.positions.length) {
-      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3><p class="msg">No open Futures positions right now.</p>`;
+      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions</h3><p class="msg">No open positions.</p>`;
+      // AUTO-PILOT CONTINUOUS LOOP: If no active trades and autoPilot is ON, immediately trigger next trade!
+      if (autoPilot) {
+        runAgentTrade(true);
+      }
     } else {
       const logs = ls.get('mexcAgentLogs', []);
-      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3>
+      $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions</h3>
         <table>
-          <tr><th>Contract &amp; Confluence</th><th>Side / Lev</th><th>Entry vs Live Price</th><th>Margin</th><th>Live Profit / Loss</th><th>Action</th></tr>
+          <tr><th>Contract</th><th>Side / Lev</th><th>Entry / Live</th><th>Margin</th><th>PnL</th><th>Action</th></tr>
           ${d.positions.map(p => {
             const isProfit = Number(p.pnl) >= 0;
-            const mLog = logs.find(l => l.coin === p.coin);
             return `<tr>
-              <td>
-                <b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" data-entry="${p.entryPrice}" data-dir="${p.direction}" style="color:#38bdf8">${p.symbol} 📈</a></b>
-                <br><small style="color:#f0b429">${mLog?.method || 'Active Futures Trade'}</small>
-                <br><small class="msg">${new Date(p.openTime).toLocaleTimeString()}</small>
-              </td>
+              <td><b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" data-entry="${p.entryPrice}" data-dir="${p.direction}" style="color:#38bdf8">${p.symbol} 📈</a></b></td>
               <td><span class="tag ${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction}</span> <b>${p.leverage}x</b></td>
-              <td>Entry: <b>${p.entryPrice}</b><br>Live: <b>${p.markPrice}</b></td>
+              <td>${p.entryPrice} / ${p.markPrice}</td>
               <td>$${p.margin}</td>
-              <td class="${isProfit ? 'up' : 'down'}" style="font-size:1.1em">
-                <b>${isProfit ? '+' : ''}$${p.pnl} USDT (${isProfit ? '+' : ''}${p.roe}%)</b>
-              </td>
+              <td class="${isProfit ? 'up' : 'down'}"><b>${isProfit ? '+' : ''}$${p.pnl} (${isProfit ? '+' : ''}${p.roe}%)</b></td>
               <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" data-vol="${p.holdVol}" style="margin:0;padding:4px 8px">Close</button></td>
             </tr>`;
           }).join('')}
@@ -283,46 +275,26 @@ async function refreshStatus() {
         tp: matchLog?.tp
       });
 
-      document.querySelectorAll('.chartCoinLink').forEach(a => a.onclick = () => {
-        const mLog = logs.find(l => l.coin === a.dataset.coin);
-        loadChartCoin(a.dataset.coin, {
-          coin: a.dataset.coin,
-          direction: a.dataset.dir,
-          entry: a.dataset.entry,
-          sl: mLog?.sl,
-          tp: mLog?.tp
-        });
-      });
-
       document.querySelectorAll('.closeBtn').forEach(btn => btn.onclick = async () => {
-        if (!confirm(`Close ${btn.dataset.sym} ${btn.dataset.dir} position at market price?`)) return;
-        btn.disabled = true; btn.textContent = 'Closing...';
-        await closePositionApi({
-          symbol: btn.dataset.sym,
-          positionId: btn.dataset.id,
-          direction: btn.dataset.dir,
-          holdVol: btn.dataset.vol
-        });
+        if (!confirm(`Close position?`)) return;
+        await closePositionApi({ symbol: btn.dataset.sym, positionId: btn.dataset.id, direction: btn.dataset.dir, holdVol: btn.dataset.vol });
         await refreshStatus();
       });
     }
-    $('statusMsg').innerHTML = `<span class="up">✓ Live PnL &amp; Trend Updated (${new Date().toLocaleTimeString()})</span>`;
-  } catch (e) {
-    $('statusMsg').innerHTML = `<span class="down">⚠ Network error checking MEXC status.</span>`;
-  }
+  } catch (e) {}
 }
 
-async function runAgentTrade() {
+async function runAgentTrade(isAutoLoop = false) {
   const secret = $('sec').value.trim();
-  if (!secret) { alert('Please enter your Agent Password first!'); return; }
+  if (!secret) { if (!isAutoLoop) alert('Enter Agent Password!'); return; }
   saveCfg();
 
   const marginVal = Math.max(0.5, +$('margin').value || 1);
   const isAutoLev = $('autoLev').value === 'auto';
   const stratMode = $('stratMode') ? $('stratMode').value : 'ALL25';
 
-  $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins across All 25 Institutional Methods (5 Pillars) &amp; Consulting Gemini AI...</b>`;
+  if (!isAutoLoop) $('runOnceBtn').disabled = true;
+  $('statusMsg').innerHTML = `🤖 <b>Scanning 25 Methods for next trade...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -336,14 +308,14 @@ async function runAgentTrade() {
         autoLeverage: isAutoLev,
         leverage: +$('lev').value || 10,
         timeframe: $('tf').value,
-        maxOpen: +$('maxOpen').value || 2
+        maxOpen: +$('maxOpen').value || 1
       })
     });
     const d = await r.json();
     if (!r.ok || d.error) {
-      $('statusMsg').innerHTML = `<span class="down">❌ ${d.error}</span>`;
+      $('statusMsg').innerHTML = `<span class="down">${d.error}</span>`;
     } else {
-      const usedLev = d.exec.leverage || +$('lev').value || 10;
+      const usedLev = d.exec.leverage || 10;
       const logs = ls.get('mexcAgentLogs', []);
       logs.unshift({
         time: Date.now(),
@@ -364,27 +336,24 @@ async function runAgentTrade() {
       ls.set('mexcAgentLogs', logs.slice(0, 50));
       renderLogs();
       loadChartCoin(d.pick.coin, d.pick);
-      $('statusMsg').innerHTML = `<span class="up">✅ AI Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x) — ${d.pick.method}!</span>`;
+      $('statusMsg').innerHTML = `<span class="up">✅ Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x)!</span>`;
       await refreshStatus();
     }
   } catch (e) {
-    $('statusMsg').innerHTML = `<span class="down">❌ Execution failed: ${e.message}</span>`;
+    $('statusMsg').innerHTML = `<span class="down">Execution failed.</span>`;
   }
-  $('runOnceBtn').disabled = false;
+  if (!isAutoLoop) $('runOnceBtn').disabled = false;
 }
 
-$('runOnceBtn').onclick = runAgentTrade;
+$('runOnceBtn').onclick = () => runAgentTrade(false);
 $('refreshBtn').onclick = refreshStatus;
 
 $('autoToggleBtn').onclick = () => {
   autoPilot = !autoPilot;
-  $('autoToggleBtn').textContent = `🔄 Start 24/7 Auto-Pilot: ${autoPilot ? 'ON (Active)' : 'OFF'}`;
+  $('autoToggleBtn').textContent = `🔄 Start Auto-Pilot (Continuous Loop): ${autoPilot ? 'ON (Active)' : 'OFF'}`;
   $('autoToggleBtn').style.background = autoPilot ? '#2ecc9a' : '#f0b429';
   if (autoPilot) {
-    runAgentTrade();
-    autoTimer = setInterval(runAgentTrade, 15 * 60 * 1000);
-  } else {
-    clearInterval(autoTimer);
+    refreshStatus();
   }
 };
 
