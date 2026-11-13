@@ -17,10 +17,10 @@ if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
 const savedCfg = ls.get('mexcAgentCfg', {
-  sec: '', stratMode: 'ALL', margin: 1, autoLev: 'auto', lev: 10, tf: '15m', maxOpen: 2, tpRoe: 20, slRoe: 25
+  sec: '', stratMode: 'ALL25', margin: 1, autoLev: 'auto', lev: 10, tf: '15m', maxOpen: 2, tpRoe: 20, slRoe: 25
 });
 $('sec').value = savedCfg.sec || '';
-if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL';
+if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL25';
 $('margin').value = savedCfg.margin != null ? savedCfg.margin : 1;
 $('autoLev').value = savedCfg.autoLev || 'auto';
 $('lev').value = savedCfg.lev || 10;
@@ -39,7 +39,7 @@ const saveCfg = () => {
   toggleLevInput();
   ls.set('mexcAgentCfg', {
     sec: $('sec').value.trim(),
-    stratMode: $('stratMode') ? $('stratMode').value : 'ALL',
+    stratMode: $('stratMode') ? $('stratMode').value : 'ALL25',
     margin: +$('margin').value || 1,
     autoLev: $('autoLev').value,
     lev: +$('lev').value || 10,
@@ -151,23 +151,27 @@ function renderAiBrain() {
   if (!logs.length) return;
   const latest = logs[0];
   const radar = latest.topCandidates || [];
+  const badges = (latest.matchedMethods || []).map(m =>
+    `<span style="display:inline-block;background:rgba(46,204,154,0.15);border:1px solid #2ecc9a;border-radius:4px;padding:2px 6px;margin:2px;font-size:0.78em">${m}</span>`
+  ).join('');
 
   $('AI_BRAIN').innerHTML = `
-    <h3>🧠 Latest AI 6-Method Deep Analysis &amp; Top 3 Radar</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:8px">
+    <h3>🧠 Latest AI 25-Method Confluence Breakdown &amp; Top 3 Radar</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;margin-top:8px">
       <div style="background:rgba(56,189,248,0.08);border:1px solid #38bdf8;border-radius:8px;padding:10px">
         <b>🎯 Selected Trade: ${latest.coin}_USDT <span class="tag ${latest.direction === 'LONG' ? 'up' : 'down'}">${latest.direction} (${latest.leverage}x)</span></b>
-        <p style="margin:6px 0"><b>📐 Winning Method(s):</b> <span style="color:#f0b429;font-weight:700">${latest.method || '6-Method Confluence'}</span></p>
-        <p style="margin:6px 0"><b>📊 Confluence Indicators:</b> <small>${latest.indicators || 'MTF EMA + RSI + ATR'}</small></p>
+        <p style="margin:6px 0"><b>🏆 Confluence Score:</b> <span style="color:#f0b429;font-weight:700">${latest.method || '25-Method Matrix'}</span></p>
+        <p style="margin:6px 0"><b>📊 5-Pillar Breakdown:</b> <small>${latest.indicators || ''}</small></p>
+        ${badges ? `<div style="margin:6px 0">${badges}</div>` : ''}
         <p style="margin:6px 0"><small>${latest.reason}</small></p>
       </div>
       <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:8px;padding:10px">
-        <b>🏆 Top 3 Coins Ranked from 6-Method Scan:</b>
-        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Method</th><th>Score</th></tr>` +
+        <b>🏆 Top 3 Coins Ranked from 25-Method Scan:</b>
+        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Confluence</th><th>Score</th></tr>` +
           radar.map((c, idx) => `<tr>
             <td>#${idx + 1}</td>
             <td><b>${c.coin}</b> <span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td>
-            <td><small>${c.method || 'Confluence'}</small></td>
+            <td><small>${c.method || '25-Method'}</small></td>
             <td><b>${c.confidence}%</b></td>
           </tr>`).join('') + `</table>` : '<p class="msg">Radar data available on next scan.</p>'}
       </div>
@@ -181,11 +185,11 @@ function renderLogs() {
     return;
   }
   renderAiBrain();
-  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>6-Method Confluence</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
+  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>25-Method Matrix</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
     logs.map(l => `<tr>
       <td><small>${new Date(l.time).toLocaleString()}</small></td>
       <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span><br><small>Margin: $${l.margin}</small></td>
-      <td><b style="color:#f0b429">${l.method || '6-Method Confluence'}</b><br><small class="msg">${l.indicators || ''}</small></td>
+      <td><b style="color:#f0b429">${l.method || '25-Method Matrix'}</b><br><small class="msg">${l.indicators || ''}</small></td>
       <td>Entry: <b>${l.entry}</b><br><span class="down">SL: ${l.sl}</span><br><span class="up">TP: ${l.tp}</span></td>
       <td><small>${l.reason} (Score: ${l.confidence}%)</small></td>
     </tr>`).join('') + '</table>';
@@ -248,7 +252,7 @@ async function refreshStatus() {
       const logs = ls.get('mexcAgentLogs', []);
       $('POS').innerHTML = `<h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3>
         <table>
-          <tr><th>Contract &amp; Method</th><th>Side / Lev</th><th>Entry vs Live Price</th><th>Margin</th><th>Live Profit / Loss</th><th>Action</th></tr>
+          <tr><th>Contract &amp; Confluence</th><th>Side / Lev</th><th>Entry vs Live Price</th><th>Margin</th><th>Live Profit / Loss</th><th>Action</th></tr>
           ${d.positions.map(p => {
             const isProfit = Number(p.pnl) >= 0;
             const mLog = logs.find(l => l.coin === p.coin);
@@ -315,10 +319,10 @@ async function runAgentTrade() {
 
   const marginVal = Math.max(0.5, +$('margin').value || 1);
   const isAutoLev = $('autoLev').value === 'auto';
-  const stratMode = $('stratMode') ? $('stratMode').value : 'ALL';
+  const stratMode = $('stratMode') ? $('stratMode').value : 'ALL25';
 
   $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins across ${stratMode === 'ALL' ? 'All 6 Institutional Methods' : stratMode} &amp; Consulting Gemini AI...</b>`;
+  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins across All 25 Institutional Methods (5 Pillars) &amp; Consulting Gemini AI...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -346,6 +350,7 @@ async function runAgentTrade() {
         coin: d.pick.coin,
         direction: d.pick.direction,
         method: d.pick.method,
+        matchedMethods: d.pick.matchedMethods || [],
         indicators: d.pick.indicators,
         topCandidates: d.pick.topCandidates,
         leverage: usedLev,
@@ -359,7 +364,7 @@ async function runAgentTrade() {
       ls.set('mexcAgentLogs', logs.slice(0, 50));
       renderLogs();
       loadChartCoin(d.pick.coin, d.pick);
-      $('statusMsg').innerHTML = `<span class="up">✅ AI Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x) via ${d.pick.method}!</span>`;
+      $('statusMsg').innerHTML = `<span class="up">✅ AI Executed ${d.pick.direction} on ${d.pick.coin}_USDT (${usedLev}x) — ${d.pick.method}!</span>`;
       await refreshStatus();
     }
   } catch (e) {
