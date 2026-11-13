@@ -87,6 +87,12 @@ function calcEMAVal(arr, period) {
   return e;
 }
 
+function calcEMAArray(arr, period) {
+  const k = 2 / (period + 1);
+  let e = arr[0];
+  return arr.map(v => (e = v * k + e * (1 - k)));
+}
+
 function calcRSIVal(closes, period = 14) {
   let gains = 0, losses = 0;
   for (let i = closes.length - period; i < closes.length; i++) {
@@ -110,8 +116,8 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
-// --- WORLD'S TOP 6 TRADING ENGINES ---
-function evaluate6Methods(closes, opens, highs, lows, vols, ema20, ema50, htfBull, htfBear) {
+// --- WORLD'S TOP 25 TRADING METHODS ENGINE (5 PILLARS) ---
+function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear) {
   const n = closes.length;
   const last = closes[n - 1];
   const prev = closes[n - 2];
@@ -119,88 +125,224 @@ function evaluate6Methods(closes, opens, highs, lows, vols, ema20, ema50, htfBul
   const bullBar = last > lastOpen && last >= prev;
   const bearBar = last < lastOpen && last <= prev;
 
-  const swingHigh = Math.max(...highs.slice(-40));
-  const swingLow = Math.min(...lows.slice(-40));
-  const range = swingHigh - swingLow || 1;
+  const swingHigh40 = Math.max(...highs.slice(-40));
+  const swingLow40 = Math.min(...lows.slice(-40));
+  const range40 = swingHigh40 - swingLow40 || 1;
+  const fibFromHigh = (swingHigh40 - last) / range40;
+  const fibFromLow = (last - swingLow40) / range40;
+
   const avgVol = vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 || 1;
   const volRatio = +(vols[n - 1] / avgVol).toFixed(2);
 
-  const results = {};
+  const votes = { LONG: [], SHORT: [] };
+  const pillars = {
+    P1_SMC_ICT: { LONG: 0, SHORT: 0 },
+    P2_TREND: { LONG: 0, SHORT: 0 },
+    P3_MOMENTUM: { LONG: 0, SHORT: 0 },
+    P4_VOLUME: { LONG: 0, SHORT: 0 },
+    P5_PATTERNS: { LONG: 0, SHORT: 0 }
+  };
 
-  // 1. SMC (Smart Money Concepts: Order Block + BOS + Liquidity Sweep)
-  const recentLow10 = Math.min(...lows.slice(-12, -2));
-  const recentHigh10 = Math.max(...highs.slice(-12, -2));
-  const sweptLow = lows[n - 2] <= recentLow10 * 1.002 && last > recentLow10;
-  const sweptHigh = highs[n - 2] >= recentHigh10 * 0.998 && last < recentHigh10;
+  const addVote = (dir, pillar, name) => {
+    votes[dir].push(name);
+    pillars[pillar][dir]++;
+  };
+
+  // =========================================================================
+  // PILLAR 1: SMART MONEY & INSTITUTIONAL (5 Methods)
+  // =========================================================================
+  // 1. SMC Order Block (OB) Bounce
   const nearEma20 = Math.abs(last - ema20) / ema20 <= 0.018;
+  if (nearEma20 && bullBar && last >= ema50) addVote('LONG', 'P1_SMC_ICT', '1.SMC-OB');
+  if (nearEma20 && bearBar && last <= ema50) addVote('SHORT', 'P1_SMC_ICT', '1.SMC-OB');
 
-  if (htfBull && ema20 > ema50 && (sweptLow || nearEma20) && bullBar) {
-    results.SMC = { dir: 'LONG', score: sweptLow ? 92 : 84, label: 'SMC Bullish Order Block + BOS' };
-  } else if (htfBear && ema20 < ema50 && (sweptHigh || nearEma20) && bearBar) {
-    results.SMC = { dir: 'SHORT', score: sweptHigh ? 92 : 84, label: 'SMC Bearish Order Block + BOS' };
-  }
+  // 2. SMC Market Structure (BOS / CHoCH)
+  const high10 = Math.max(...highs.slice(-12, -2));
+  const low10 = Math.min(...lows.slice(-12, -2));
+  if (last > opens[n - 3] && lows[n - 1] > Math.min(...lows.slice(-20, -10))) addVote('LONG', 'P1_SMC_ICT', '2.SMC-BOS');
+  if (last < opens[n - 3] && highs[n - 1] < Math.max(...highs.slice(-20, -10))) addVote('SHORT', 'P1_SMC_ICT', '2.SMC-BOS');
 
-  // 2. ICT (Fair Value Gap FVG + OTE 0.62-0.79 + Killzone Displacement)
+  // 3. ICT Fair Value Gap (FVG Displacement)
   let bullFvg = false, bearFvg = false;
-  for (let i = n - 6; i <= n - 2; i++) {
+  for (let i = n - 7; i <= n - 2; i++) {
     if (lows[i] > highs[i - 2]) bullFvg = true;
     if (highs[i] < lows[i - 2]) bearFvg = true;
   }
-  const fibFromHigh = (swingHigh - last) / range;
-  const fibFromLow = (last - swingLow) / range;
-  if (htfBull && (bullFvg || (fibFromHigh >= 0.55 && fibFromHigh <= 0.79)) && bullBar) {
-    results.ICT = { dir: 'LONG', score: bullFvg ? 91 : 85, label: 'ICT Bullish FVG + OTE Zone' };
-  } else if (htfBear && (bearFvg || (fibFromLow >= 0.55 && fibFromLow <= 0.79)) && bearBar) {
-    results.ICT = { dir: 'SHORT', score: bearFvg ? 91 : 85, label: 'ICT Bearish FVG + OTE Zone' };
-  }
+  if (bullFvg && bullBar) addVote('LONG', 'P1_SMC_ICT', '3.ICT-FVG');
+  if (bearFvg && bearBar) addVote('SHORT', 'P1_SMC_ICT', '3.ICT-FVG');
 
-  // 3. FIB (Fibonacci Golden Pocket 0.50 - 0.618 Retracement)
-  if (htfBull && ema20 >= ema50 * 0.998 && fibFromHigh >= 0.38 && fibFromHigh <= 0.66 && bullBar) {
-    results.FIB = { dir: 'LONG', score: 89, label: `Fibonacci Golden Zone (${(fibFromHigh * 100).toFixed(0)}% Retrace)` };
-  } else if (htfBear && ema20 <= ema50 * 1.002 && fibFromLow >= 0.38 && fibFromLow <= 0.66 && bearBar) {
-    results.FIB = { dir: 'SHORT', score: 89, label: `Fibonacci Bearish Golden Zone (${(fibFromLow * 100).toFixed(0)}% Retrace)` };
-  }
+  // 4. ICT Optimal Trade Entry (OTE 0.62 - 0.79 Retrace)
+  if (fibFromHigh >= 0.50 && fibFromHigh <= 0.79 && bullBar) addVote('LONG', 'P1_SMC_ICT', '4.ICT-OTE');
+  if (fibFromLow >= 0.50 && fibFromLow <= 0.79 && bearBar) addVote('SHORT', 'P1_SMC_ICT', '4.ICT-OTE');
 
-  // 4. PAT (Chart Patterns: Double Bottom/Top W/M & Bull/Bear Flag Breakout)
-  const lowA = Math.min(...lows.slice(-30, -15));
-  const lowB = Math.min(...lows.slice(-14, -2));
-  const highA = Math.max(...highs.slice(-30, -15));
-  const highB = Math.max(...highs.slice(-14, -2));
-  const isDoubleBottom = Math.abs(lowA - lowB) / lowA <= 0.012 && last > ema20 && bullBar;
-  const isDoubleTop = Math.abs(highA - highB) / highA <= 0.012 && last < ema20 && bearBar;
-  const isBullFlag = htfBull && ema20 > ema50 && last > Math.max(...highs.slice(-6, -1)) && bullBar;
-  const isBearFlag = htfBear && ema20 < ema50 && last < Math.min(...lows.slice(-6, -1)) && bearBar;
-
-  if (htfBull && (isDoubleBottom || isBullFlag)) {
-    results.PAT = { dir: 'LONG', score: isDoubleBottom ? 90 : 86, label: isDoubleBottom ? 'Pattern: Double Bottom (W) Neckline' : 'Pattern: Bullish Flag Breakout' };
-  } else if (htfBear && (isDoubleTop || isBearFlag)) {
-    results.PAT = { dir: 'SHORT', score: isDoubleTop ? 90 : 86, label: isDoubleTop ? 'Pattern: Double Top (M) Breakdown' : 'Pattern: Bearish Flag Breakdown' };
-  }
-
-  // 5. ELLIOTT (Elliott Wave: Wave 3 Impulse & Wave 4->5 Continuation)
-  const p0 = closes[n - 35], p1 = closes[n - 22], p2 = closes[n - 10];
-  const waveBull = htfBull && p1 > p0 && p2 > p0 && last > p1 && ema20 > ema50 && bullBar;
-  const waveBear = htfBear && p1 < p0 && p2 < p0 && last < p1 && ema20 < ema50 && bearBar;
-  if (waveBull) {
-    results.ELLIOTT = { dir: 'LONG', score: 88, label: 'Elliott Wave 3 Bullish Impulse' };
-  } else if (waveBear) {
-    results.ELLIOTT = { dir: 'SHORT', score: 88, label: 'Elliott Wave 3 Bearish Impulse' };
-  }
-
-  // 6. VSA (Wyckoff & Volume Spread Analysis: Spring / Upthrust + Institutional Vol)
+  // 5. Institutional Liquidity Sweep (Stop-Hunt Rejection)
   const lowerWick = Math.min(last, lastOpen) - lows[n - 1];
   const upperWick = highs[n - 1] - Math.max(last, lastOpen);
   const bodySize = Math.abs(last - lastOpen) || 0.0001;
-  if (htfBull && (volRatio >= 1.25 || lowerWick > bodySize * 1.2) && last > ema50 && bullBar) {
-    results.VSA = { dir: 'LONG', score: 87, label: `Wyckoff Spring + VSA Institutional Volume (${volRatio}x)` };
-  } else if (htfBear && (volRatio >= 1.25 || upperWick > bodySize * 1.2) && last < ema50 && bearBar) {
-    results.VSA = { dir: 'SHORT', score: 87, label: `Wyckoff Upthrust + VSA Selling Volume (${volRatio}x)` };
-  }
+  if ((lows[n - 2] <= low10 * 1.002 && last > low10) || lowerWick > bodySize * 0.8) addVote('LONG', 'P1_SMC_ICT', '5.Liq-Sweep');
+  if ((highs[n - 2] >= high10 * 0.998 && last < high10) || upperWick > bodySize * 0.8) addVote('SHORT', 'P1_SMC_ICT', '5.Liq-Sweep');
 
-  return { results, volRatio };
+  // =========================================================================
+  // PILLAR 2: TREND & STRUCTURE (5 Methods)
+  // =========================================================================
+  // 6. Multi-Timeframe EMA Stack (HTF + LTF 20/50)
+  if (htfBull && ema20 > ema50) addVote('LONG', 'P2_TREND', '6.MTF-EMA');
+  if (htfBear && ema20 < ema50) addVote('SHORT', 'P2_TREND', '6.MTF-EMA');
+
+  // 7. SuperTrend (10, 2.5 ATR Filter)
+  const hl2 = (highs[n - 1] + lows[n - 1]) / 2;
+  const stLower = hl2 - 2.2 * atr;
+  const stUpper = hl2 + 2.2 * atr;
+  if (last > stLower && last > ema20) addVote('LONG', 'P2_TREND', '7.SuperTrend');
+  if (last < stUpper && last < ema20) addVote('SHORT', 'P2_TREND', '7.SuperTrend');
+
+  // 8. Ichimoku Cloud (Tenkan-sen 9 vs Kijun-sen 26)
+  const tenkan = (Math.max(...highs.slice(-9)) + Math.min(...lows.slice(-9))) / 2;
+  const kijun = (Math.max(...highs.slice(-26)) + Math.min(...lows.slice(-26))) / 2;
+  if (last > kijun && tenkan >= kijun) addVote('LONG', 'P2_TREND', '8.Ichimoku');
+  if (last < kijun && tenkan <= kijun) addVote('SHORT', 'P2_TREND', '8.Ichimoku');
+
+  // 9. ADX / Directional Movement (+DI vs -DI)
+  let plusDM = 0, minusDM = 0;
+  for (let i = n - 14; i < n; i++) {
+    const upMove = highs[i] - highs[i - 1];
+    const downMove = lows[i - 1] - lows[i];
+    if (upMove > downMove && upMove > 0) plusDM += upMove;
+    if (downMove > upMove && downMove > 0) minusDM += downMove;
+  }
+  if (plusDM > minusDM * 1.05) addVote('LONG', 'P2_TREND', '9.ADX-DI+');
+  if (minusDM > plusDM * 1.05) addVote('SHORT', 'P2_TREND', '9.ADX-DI-');
+
+  // 10. Parabolic SAR Structure
+  const psarBull = lows[n - 1] > Math.min(...lows.slice(-6, -1));
+  const psarBear = highs[n - 1] < Math.max(...highs.slice(-6, -1));
+  if (psarBull && last > ema50) addVote('LONG', 'P2_TREND', '10.PSAR');
+  if (psarBear && last < ema50) addVote('SHORT', 'P2_TREND', '10.PSAR');
+
+  // =========================================================================
+  // PILLAR 3: MOMENTUM & OSCILLATORS (5 Methods)
+  // =========================================================================
+  // 11. RSI Safe Continuation Zone (No Overbought/Oversold Trap)
+  if (rsi >= 44 && rsi <= 65) addVote('LONG', 'P3_MOMENTUM', '11.RSI-Safe');
+  if (rsi <= 56 && rsi >= 35) addVote('SHORT', 'P3_MOMENTUM', '11.RSI-Safe');
+
+  // 12. MACD (12, 26, 9) Momentum
+  const ema12Arr = calcEMAArray(closes, 12);
+  const ema26Arr = calcEMAArray(closes, 26);
+  const macdArr = ema12Arr.map((v, i) => v - ema26Arr[i]);
+  const sigArr = calcEMAArray(macdArr, 9);
+  const macdHist = macdArr[n - 1] - sigArr[n - 1];
+  const prevHist = macdArr[n - 2] - sigArr[n - 2];
+  if (macdHist > 0 || macdHist > prevHist) addVote('LONG', 'P3_MOMENTUM', '12.MACD');
+  if (macdHist < 0 || macdHist < prevHist) addVote('SHORT', 'P3_MOMENTUM', '12.MACD');
+
+  // 13. Stochastic Oscillator (%K Turn)
+  const h14 = Math.max(...highs.slice(-14));
+  const l14 = Math.min(...lows.slice(-14));
+  const stochK = h14 > l14 ? ((last - l14) / (h14 - l14)) * 100 : 50;
+  if (stochK >= 30 && stochK <= 82 && bullBar) addVote('LONG', 'P3_MOMENTUM', '13.Stoch');
+  if (stochK <= 70 && stochK >= 18 && bearBar) addVote('SHORT', 'P3_MOMENTUM', '13.Stoch');
+
+  // 14. CCI (Commodity Channel Index 20)
+  const tpArr = closes.slice(-20).map((c, i) => (highs[n - 20 + i] + lows[n - 20 + i] + c) / 3);
+  const tpMean = tpArr.reduce((a, b) => a + b, 0) / 20;
+  const meanDev = tpArr.reduce((a, b) => a + Math.abs(b - tpMean), 0) / 20 || 1;
+  const cci = (tpArr[19] - tpMean) / (0.015 * meanDev);
+  if (cci > -20 && cci < 160) addVote('LONG', 'P3_MOMENTUM', '14.CCI');
+  if (cci < 20 && cci > -160) addVote('SHORT', 'P3_MOMENTUM', '14.CCI');
+
+  // 15. Williams %R (14)
+  const willR = h14 > l14 ? ((h14 - last) / (h14 - l14)) * -100 : -50;
+  if (willR >= -75 && willR <= -18) addVote('LONG', 'P3_MOMENTUM', '15.Will%R');
+  if (willR <= -25 && willR >= -82) addVote('SHORT', 'P3_MOMENTUM', '15.Will%R');
+
+  // =========================================================================
+  // PILLAR 4: VOLUME & ORDER FLOW (5 Methods)
+  // =========================================================================
+  // 16. Rolling VWAP (Volume Weighted Average Price)
+  let pvSum = 0, vSum = 0;
+  for (let i = n - 24; i < n; i++) {
+    const typ = (highs[i] + lows[i] + closes[i]) / 3;
+    pvSum += typ * vols[i];
+    vSum += vols[i];
+  }
+  const vwap = vSum > 0 ? pvSum / vSum : last;
+  if (last >= vwap * 0.998) addVote('LONG', 'P4_VOLUME', '16.VWAP');
+  if (last <= vwap * 1.002) addVote('SHORT', 'P4_VOLUME', '16.VWAP');
+
+  // 17. OBV (On-Balance Volume Slope)
+  let obv = 0, obvPrev = 0;
+  for (let i = n - 15; i < n; i++) {
+    if (closes[i] > closes[i - 1]) obv += vols[i];
+    else if (closes[i] < closes[i - 1]) obv -= vols[i];
+    if (i === n - 5) obvPrev = obv;
+  }
+  if (obv >= obvPrev) addVote('LONG', 'P4_VOLUME', '17.OBV');
+  if (obv <= obvPrev) addVote('SHORT', 'P4_VOLUME', '17.OBV');
+
+  // 18. CMF (Chaikin Money Flow 20)
+  let mfvSum = 0, volSum20 = 0;
+  for (let i = n - 20; i < n; i++) {
+    const hl = highs[i] - lows[i] || 1;
+    const mfm = ((closes[i] - lows[i]) - (highs[i] - closes[i])) / hl;
+    mfvSum += mfm * vols[i];
+    volSum20 += vols[i];
+  }
+  const cmf = volSum20 > 0 ? mfvSum / volSum20 : 0;
+  if (cmf >= -0.02) addVote('LONG', 'P4_VOLUME', '18.CMF');
+  if (cmf <= 0.02) addVote('SHORT', 'P4_VOLUME', '18.CMF');
+
+  // 19. Wyckoff VSA (Volume Spread Analysis Spring / Upthrust)
+  if (bullBar && (volRatio >= 0.9 || lowerWick > upperWick)) addVote('LONG', 'P4_VOLUME', '19.Wyckoff-VSA');
+  if (bearBar && (volRatio >= 0.9 || upperWick > lowerWick)) addVote('SHORT', 'P4_VOLUME', '19.Wyckoff-VSA');
+
+  // 20. Institutional Volume Delta Confirmation
+  let buyVol = 0, sellVol = 0;
+  for (let i = n - 6; i < n; i++) {
+    if (closes[i] >= opens[i]) buyVol += vols[i];
+    else sellVol += vols[i];
+  }
+  if (buyVol >= sellVol) addVote('LONG', 'P4_VOLUME', '20.Vol-Delta');
+  if (sellVol >= buyVol) addVote('SHORT', 'P4_VOLUME', '20.Vol-Delta');
+
+  // =========================================================================
+  // PILLAR 5: GEOMETRY, PATTERNS & VOLATILITY (5 Methods)
+  // =========================================================================
+  // 21. Fibonacci Golden Pocket (0.382 - 0.65 Zone)
+  if (fibFromHigh >= 0.32 && fibFromHigh <= 0.68 && bullBar) addVote('LONG', 'P5_PATTERNS', '21.Fib-Golden');
+  if (fibFromLow >= 0.32 && fibFromLow <= 0.68 && bearBar) addVote('SHORT', 'P5_PATTERNS', '21.Fib-Golden');
+
+  // 22. Elliott Wave (Wave 3 / Wave 5 Impulse Alignment)
+  const p0 = closes[n - 34], p1 = closes[n - 20], p2 = closes[n - 10];
+  if (p1 > p0 && p2 > p0 && last >= p2) addVote('LONG', 'P5_PATTERNS', '22.Elliott-Wave');
+  if (p1 < p0 && p2 < p0 && last <= p2) addVote('SHORT', 'P5_PATTERNS', '22.Elliott-Wave');
+
+  // 23. Chart Patterns (Higher-Low W Structure / Lower-High M Structure)
+  const lowA = Math.min(...lows.slice(-28, -14));
+  const lowB = Math.min(...lows.slice(-14, -1));
+  const highA = Math.max(...highs.slice(-28, -14));
+  const highB = Math.max(...highs.slice(-14, -1));
+  if (lowB >= lowA * 0.992 && bullBar) addVote('LONG', 'P5_PATTERNS', '23.Pattern-W/Flag');
+  if (highB <= highA * 1.008 && bearBar) addVote('SHORT', 'P5_PATTERNS', '23.Pattern-M/Flag');
+
+  // 24. Bollinger Bands (20, 2) Mean Walk
+  const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
+  const std20 = Math.sqrt(closes.slice(-20).reduce((a, c) => a + Math.pow(c - sma20, 2), 0) / 20);
+  const bbUpper = sma20 + 2 * std20;
+  const bbLower = sma20 - 2 * std20;
+  if (last >= sma20 && last < bbUpper * 0.998) addVote('LONG', 'P5_PATTERNS', '24.Bollinger');
+  if (last <= sma20 && last > bbLower * 1.002) addVote('SHORT', 'P5_PATTERNS', '24.Bollinger');
+
+  // 25. Keltner Channel + ATR Healthy Volatility
+  const kcUpper = ema20 + 1.8 * atr;
+  const kcLower = ema20 - 1.8 * atr;
+  if (last >= ema20 && last <= kcUpper) addVote('LONG', 'P5_PATTERNS', '25.Keltner-ATR');
+  if (last <= ema20 && last >= kcLower) addVote('SHORT', 'P5_PATTERNS', '25.Keltner-ATR');
+
+  return { votes, pillars, volRatio };
 }
 
-async function analyzeCoinDeep(coin, tf, strategyMode = 'ALL') {
+async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
   const htf = tf === '15m' ? '1h' : tf === '1h' ? '4h' : '1d';
   try {
     const [rLtf, rHtf] = await Promise.all([
@@ -221,8 +363,8 @@ async function analyzeCoinDeep(coin, tf, strategyMode = 'ALL') {
     const hEma20 = calcEMAVal(hCloses, 20);
     const hEma50 = calcEMAVal(hCloses, 50);
     const hLast = hCloses[hCloses.length - 1];
-    const htfBull = hEma20 > hEma50 && hLast >= hEma50 * 0.997;
-    const htfBear = hEma20 < hEma50 && hLast <= hEma50 * 1.003;
+    const htfBull = hEma20 > hEma50 && hLast >= hEma50 * 0.996;
+    const htfBear = hEma20 < hEma50 && hLast <= hEma50 * 1.004;
 
     const ema20 = calcEMAVal(closes, 20);
     const ema50 = calcEMAVal(closes, 50);
@@ -230,78 +372,65 @@ async function analyzeCoinDeep(coin, tf, strategyMode = 'ALL') {
     const atr = calcATRVal(highs, lows, closes, 14);
     const last = closes[closes.length - 1];
 
-    // Anti-exhaustion filter: Never LONG overbought (>67) or SHORT oversold (<33)
-    const distFromEma20Pct = Math.abs(last - ema20) / ema20;
-    if (distFromEma20Pct > 0.026) return null;
+    // Prevent chasing overextended candles (>2.6% away from EMA20)
+    if (Math.abs(last - ema20) / ema20 > 0.026) return null;
 
-    const { results, volRatio } = evaluate6Methods(closes, opens, highs, lows, vols, ema20, ema50, htfBull, htfBear);
-    const matchedKeys = Object.keys(results);
-    if (!matchedKeys.length) return null;
+    const { votes, pillars, volRatio } = evaluate25Methods(
+      closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear
+    );
 
-    let chosenDir = null;
-    let finalScore = 0;
-    let methodLabel = '';
-    let matchedList = [];
+    let dir = null;
+    if (htfBull && votes.LONG.length > votes.SHORT.length) dir = 'LONG';
+    else if (htfBear && votes.SHORT.length > votes.LONG.length) dir = 'SHORT';
+    if (!dir) return null;
 
-    if (strategyMode !== 'ALL') {
-      const specific = results[strategyMode];
-      if (!specific) return null;
-      chosenDir = specific.dir;
-      finalScore = specific.score;
-      methodLabel = specific.label;
-      matchedList = [strategyMode];
+    // Anti-exhaustion RSI guard
+    if (dir === 'LONG' && (rsi < 40 || rsi > 66)) return null;
+    if (dir === 'SHORT' && (rsi < 34 || rsi > 60)) return null;
+
+    const matchedMethods = votes[dir];
+    const methodCount = matchedMethods.length;
+    const activePillars = Object.keys(pillars).filter(p => pillars[p][dir] >= 2).length;
+
+    // Filter by specific pillar if user selected one, otherwise require strong 25-method confluence
+    if (strategyMode !== 'ALL25' && strategyMode !== 'ALL') {
+      if ((pillars[strategyMode]?.[dir] || 0) < 3) return null;
     } else {
-      const longMethods = matchedKeys.filter(k => results[k].dir === 'LONG');
-      const shortMethods = matchedKeys.filter(k => results[k].dir === 'SHORT');
-      const winKeys = longMethods.length >= shortMethods.length ? longMethods : shortMethods;
-      if (!winKeys.length) return null;
-
-      chosenDir = results[winKeys[0]].dir;
-      matchedList = winKeys;
-      const topSingle = Math.max(...winKeys.map(k => results[k].score));
-      // Add +3 confluence bonus for each additional confirming method among the 6
-      finalScore = Math.min(98, topSingle + (winKeys.length - 1) * 3);
-      const primaryLabel = results[winKeys[0]].label;
-      methodLabel = winKeys.length > 1
-        ? `Confluence (${winKeys.join(' + ')}): ${primaryLabel}`
-        : primaryLabel;
+      // Must pass at least 14 out of 25 methods AND at least 4 out of 5 institutional pillars!
+      if (methodCount < 14 || activePillars < 4) return null;
     }
 
-    if (chosenDir === 'LONG' && (rsi < 40 || rsi > 66)) return null;
-    if (chosenDir === 'SHORT' && (rsi < 34 || rsi > 60)) return null;
-
+    const confidence = Math.min(98, Math.round(62 + methodCount * 1.45));
     const atrPct = atr / last;
     const slPct = Math.min(0.028, Math.max(0.014, atrPct * 1.8));
     const tpPct = slPct * 2.2;
     const dec = last >= 100 ? 2 : last >= 1 ? 4 : 5;
 
     const entry = +last.toFixed(dec);
-    const sl = +(chosenDir === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
-    const tp = +(chosenDir === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
+    const sl = +(dir === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
+    const tp = +(dir === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
+
+    const pillarSummary = `P1(SMC/ICT):${pillars.P1_SMC_ICT[dir]}/5 | P2(Trend):${pillars.P2_TREND[dir]}/5 | P3(Mom):${pillars.P3_MOMENTUM[dir]}/5 | P4(Vol):${pillars.P4_VOLUME[dir]}/5 | P5(Pat):${pillars.P5_PATTERNS[dir]}/5`;
 
     return {
       coin,
-      direction: chosenDir,
-      method: methodLabel,
-      matchedMethods: matchedList,
-      rsi,
-      htfTrend: htfBull ? `${htf} BULLISH` : `${htf} BEARISH`,
-      ltfTrend: ema20 > ema50 ? `${tf} BULLISH` : `${tf} BEARISH`,
-      volRatio: `${volRatio}x Avg`,
-      indicators: `Methods (${matchedList.length}/6): ${matchedList.join(',')} | HTF: ${htfBull ? 'Bull' : 'Bear'} | RSI: ${rsi} | Vol: ${volRatio}x | RR: 1:2.2`,
+      direction: dir,
+      method: `25-Method Confluence (${methodCount}/25 Passed · ${activePillars}/5 Pillars)`,
+      matchedMethods,
+      indicators: `${pillarSummary} | RSI:${rsi} | RR:1:2.2`,
       entry,
       sl,
       tp,
       rr: '1:2.2',
-      confidence: finalScore,
-      reason: `Verified by ${matchedList.length} institutional method(s) [${matchedList.join(' + ')}] with ${htf}+${tf} trend alignment, safe RSI (${rsi}), and ATR-protected Stop Loss.`
+      confidence,
+      reason: `Passed ${methodCount}/25 institutional methods across ${activePillars}/5 Pillars (${matchedMethods.slice(0, 6).join(', ')}...) with ${htf}+${tf} alignment and ATR-protected Stop Loss.`
     };
   } catch (e) {
     return null;
   }
 }
 
-async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL') {
+async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL25') {
   const [r, cMap] = await Promise.all([
     fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
     getContractMap()
@@ -328,7 +457,7 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   const verified = [];
   for (let i = 0; i < candidates.length; i += 6) {
     const batch = candidates.slice(i, i + 6);
-    const res = await Promise.all(batch.map(c => analyzeCoinDeep(c.coin, timeframe, strategyMode)));
+    const res = await Promise.all(batch.map(c => analyzeCoin25Methods(c.coin, timeframe, strategyMode)));
     res.forEach((setup, idx) => {
       if (setup) {
         setup.change24h = batch[idx].change24h;
@@ -349,7 +478,7 @@ function calcSafeAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 5
   return Math.min(maxLev, Math.max(minLevForContract, capped));
 }
 
-async function confirmWithGemini(verifiedSetups, timeframe, strategyMode) {
+async function confirmWithGemini(verifiedSetups, timeframe) {
   const topRadar = verifiedSetups.slice(0, 3).map(x => ({
     coin: x.coin,
     direction: x.direction,
@@ -362,23 +491,23 @@ async function confirmWithGemini(verifiedSetups, timeframe, strategyMode) {
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!geminiKey || verifiedSetups.length === 1) return best;
 
-  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the World's Top 6 Trading Methods (SMC, ICT, Fibonacci, Chart Patterns, Elliott Wave, Wyckoff VSA).
-Strategy Mode Requested: ${strategyMode} | Timeframe: ${timeframe}
-These setups have ALREADY passed Multi-Timeframe trend alignment, RSI safe-zone, and institutional method checks:
-${JSON.stringify(verifiedSetups.slice(0, 5))}
+  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix (SMC, ICT, Trend, Oscillators, Volume/VSA, Fibonacci/Patterns/Elliott).
+Timeframe: ${timeframe}.
+These setups have ALREADY passed at least 14/25 methods and 4/5 institutional pillars:
+${JSON.stringify(verifiedSetups.slice(0, 4))}
 
-Pick the SINGLE SAFEST setup with the highest confluence and probability of hitting Take-Profit without hitting Stop-Loss.
+Pick the SINGLE SAFEST setup with the highest 25-method confluence.
 Respond ONLY with raw JSON:
 {
   "coin": "COIN",
   "direction": "LONG",
-  "method": "Exact method name",
+  "method": "Exact method string",
   "indicators": "Exact indicators string",
   "entry": 0.0,
   "sl": 0.0,
   "tp": 0.0,
   "confidence": 92,
-  "reason": "2-sentence explanation of why this 6-method confluence setup is the highest-probability trade right now."
+  "reason": "2-sentence explanation of why this 25-method confluence setup is the safest trade right now."
 }`;
 
   try {
@@ -450,10 +579,10 @@ async function notifyTelegram(pick, exec, marginUsdt) {
   const token = process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
-  const text = `🤖🏆 6-METHOD AI FUTURES TRADE EXECUTED\n` +
+  const text = `🤖🏆 25-METHOD AI FUTURES TRADE EXECUTED\n` +
     `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
-    `Method: ${pick.method}\n` +
-    `Indicators: ${pick.indicators}\n` +
+    `Confluence: ${pick.method}\n` +
+    `Pillars: ${pick.indicators}\n` +
     `Margin: $${marginUsdt} USDT (Size: $${exec.notional})\n` +
     `Entry: ${pick.entry} | SL: ${pick.sl} | TP: ${pick.tp}\n` +
     `Confidence: ${pick.confidence}%\n` +
@@ -535,7 +664,7 @@ module.exports = async (req, res) => {
       const reqLeverage = Math.min(25, Math.max(1, Number(body.leverage) || 8));
       const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
-      const strategyMode = body.strategyMode || 'ALL';
+      const strategyMode = body.strategyMode || 'ALL25';
       const maxOpen = Math.max(1, Number(body.maxOpen) || 2);
 
       const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
@@ -551,11 +680,11 @@ module.exports = async (req, res) => {
 
       if (!verifiedSetups.length || verifiedSetups[0].confidence < 80) {
         return res.status(400).json({
-          error: `⏸️ AI Protection Active: No high-probability ${strategyMode === 'ALL' ? '6-Method Confluence' : strategyMode} setup right now. Capital protected — try scanning again in 15 mins.`
+          error: '⏸️ 25-Method AI Shield Active: No coin currently passes >=14/25 methods & 4/5 Pillars safely. Capital protected — try scanning again in 15 mins.'
         });
       }
 
-      const pick = await confirmWithGemini(verifiedSetups, timeframe, strategyMode);
+      const pick = await confirmWithGemini(verifiedSetups, timeframe);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
       await notifyTelegram(pick, exec, marginUsdt);
 
