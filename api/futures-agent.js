@@ -110,8 +110,97 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
-// Multi-Timeframe (MTF) + Anti-Trap Pullback Analysis
-async function analyzeCoinDeep(coin, tf) {
+// --- WORLD'S TOP 6 TRADING ENGINES ---
+function evaluate6Methods(closes, opens, highs, lows, vols, ema20, ema50, htfBull, htfBear) {
+  const n = closes.length;
+  const last = closes[n - 1];
+  const prev = closes[n - 2];
+  const lastOpen = opens[n - 1];
+  const bullBar = last > lastOpen && last >= prev;
+  const bearBar = last < lastOpen && last <= prev;
+
+  const swingHigh = Math.max(...highs.slice(-40));
+  const swingLow = Math.min(...lows.slice(-40));
+  const range = swingHigh - swingLow || 1;
+  const avgVol = vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 || 1;
+  const volRatio = +(vols[n - 1] / avgVol).toFixed(2);
+
+  const results = {};
+
+  // 1. SMC (Smart Money Concepts: Order Block + BOS + Liquidity Sweep)
+  const recentLow10 = Math.min(...lows.slice(-12, -2));
+  const recentHigh10 = Math.max(...highs.slice(-12, -2));
+  const sweptLow = lows[n - 2] <= recentLow10 * 1.002 && last > recentLow10;
+  const sweptHigh = highs[n - 2] >= recentHigh10 * 0.998 && last < recentHigh10;
+  const nearEma20 = Math.abs(last - ema20) / ema20 <= 0.018;
+
+  if (htfBull && ema20 > ema50 && (sweptLow || nearEma20) && bullBar) {
+    results.SMC = { dir: 'LONG', score: sweptLow ? 92 : 84, label: 'SMC Bullish Order Block + BOS' };
+  } else if (htfBear && ema20 < ema50 && (sweptHigh || nearEma20) && bearBar) {
+    results.SMC = { dir: 'SHORT', score: sweptHigh ? 92 : 84, label: 'SMC Bearish Order Block + BOS' };
+  }
+
+  // 2. ICT (Fair Value Gap FVG + OTE 0.62-0.79 + Killzone Displacement)
+  let bullFvg = false, bearFvg = false;
+  for (let i = n - 6; i <= n - 2; i++) {
+    if (lows[i] > highs[i - 2]) bullFvg = true;
+    if (highs[i] < lows[i - 2]) bearFvg = true;
+  }
+  const fibFromHigh = (swingHigh - last) / range;
+  const fibFromLow = (last - swingLow) / range;
+  if (htfBull && (bullFvg || (fibFromHigh >= 0.55 && fibFromHigh <= 0.79)) && bullBar) {
+    results.ICT = { dir: 'LONG', score: bullFvg ? 91 : 85, label: 'ICT Bullish FVG + OTE Zone' };
+  } else if (htfBear && (bearFvg || (fibFromLow >= 0.55 && fibFromLow <= 0.79)) && bearBar) {
+    results.ICT = { dir: 'SHORT', score: bearFvg ? 91 : 85, label: 'ICT Bearish FVG + OTE Zone' };
+  }
+
+  // 3. FIB (Fibonacci Golden Pocket 0.50 - 0.618 Retracement)
+  if (htfBull && ema20 >= ema50 * 0.998 && fibFromHigh >= 0.38 && fibFromHigh <= 0.66 && bullBar) {
+    results.FIB = { dir: 'LONG', score: 89, label: `Fibonacci Golden Zone (${(fibFromHigh * 100).toFixed(0)}% Retrace)` };
+  } else if (htfBear && ema20 <= ema50 * 1.002 && fibFromLow >= 0.38 && fibFromLow <= 0.66 && bearBar) {
+    results.FIB = { dir: 'SHORT', score: 89, label: `Fibonacci Bearish Golden Zone (${(fibFromLow * 100).toFixed(0)}% Retrace)` };
+  }
+
+  // 4. PAT (Chart Patterns: Double Bottom/Top W/M & Bull/Bear Flag Breakout)
+  const lowA = Math.min(...lows.slice(-30, -15));
+  const lowB = Math.min(...lows.slice(-14, -2));
+  const highA = Math.max(...highs.slice(-30, -15));
+  const highB = Math.max(...highs.slice(-14, -2));
+  const isDoubleBottom = Math.abs(lowA - lowB) / lowA <= 0.012 && last > ema20 && bullBar;
+  const isDoubleTop = Math.abs(highA - highB) / highA <= 0.012 && last < ema20 && bearBar;
+  const isBullFlag = htfBull && ema20 > ema50 && last > Math.max(...highs.slice(-6, -1)) && bullBar;
+  const isBearFlag = htfBear && ema20 < ema50 && last < Math.min(...lows.slice(-6, -1)) && bearBar;
+
+  if (htfBull && (isDoubleBottom || isBullFlag)) {
+    results.PAT = { dir: 'LONG', score: isDoubleBottom ? 90 : 86, label: isDoubleBottom ? 'Pattern: Double Bottom (W) Neckline' : 'Pattern: Bullish Flag Breakout' };
+  } else if (htfBear && (isDoubleTop || isBearFlag)) {
+    results.PAT = { dir: 'SHORT', score: isDoubleTop ? 90 : 86, label: isDoubleTop ? 'Pattern: Double Top (M) Breakdown' : 'Pattern: Bearish Flag Breakdown' };
+  }
+
+  // 5. ELLIOTT (Elliott Wave: Wave 3 Impulse & Wave 4->5 Continuation)
+  const p0 = closes[n - 35], p1 = closes[n - 22], p2 = closes[n - 10];
+  const waveBull = htfBull && p1 > p0 && p2 > p0 && last > p1 && ema20 > ema50 && bullBar;
+  const waveBear = htfBear && p1 < p0 && p2 < p0 && last < p1 && ema20 < ema50 && bearBar;
+  if (waveBull) {
+    results.ELLIOTT = { dir: 'LONG', score: 88, label: 'Elliott Wave 3 Bullish Impulse' };
+  } else if (waveBear) {
+    results.ELLIOTT = { dir: 'SHORT', score: 88, label: 'Elliott Wave 3 Bearish Impulse' };
+  }
+
+  // 6. VSA (Wyckoff & Volume Spread Analysis: Spring / Upthrust + Institutional Vol)
+  const lowerWick = Math.min(last, lastOpen) - lows[n - 1];
+  const upperWick = highs[n - 1] - Math.max(last, lastOpen);
+  const bodySize = Math.abs(last - lastOpen) || 0.0001;
+  if (htfBull && (volRatio >= 1.25 || lowerWick > bodySize * 1.2) && last > ema50 && bullBar) {
+    results.VSA = { dir: 'LONG', score: 87, label: `Wyckoff Spring + VSA Institutional Volume (${volRatio}x)` };
+  } else if (htfBear && (volRatio >= 1.25 || upperWick > bodySize * 1.2) && last < ema50 && bearBar) {
+    results.VSA = { dir: 'SHORT', score: 87, label: `Wyckoff Upthrust + VSA Selling Volume (${volRatio}x)` };
+  }
+
+  return { results, volRatio };
+}
+
+async function analyzeCoinDeep(coin, tf, strategyMode = 'ALL') {
   const htf = tf === '15m' ? '1h' : tf === '1h' ? '4h' : '1d';
   try {
     const [rLtf, rHtf] = await Promise.all([
@@ -132,93 +221,87 @@ async function analyzeCoinDeep(coin, tf) {
     const hEma20 = calcEMAVal(hCloses, 20);
     const hEma50 = calcEMAVal(hCloses, 50);
     const hLast = hCloses[hCloses.length - 1];
-    const htfBull = hEma20 > hEma50 && hLast > hEma50;
-    const htfBear = hEma20 < hEma50 && hLast < hEma50;
+    const htfBull = hEma20 > hEma50 && hLast >= hEma50 * 0.997;
+    const htfBear = hEma20 < hEma50 && hLast <= hEma50 * 1.003;
 
     const ema20 = calcEMAVal(closes, 20);
     const ema50 = calcEMAVal(closes, 50);
     const rsi = calcRSIVal(closes, 14);
     const atr = calcATRVal(highs, lows, closes, 14);
-
     const last = closes[closes.length - 1];
-    const prevClose = closes[closes.length - 2];
-    const lastOpen = opens[opens.length - 1];
-    const bullCandle = last > lastOpen && last > prevClose;
-    const bearCandle = last < lastOpen && last < prevClose;
 
-    const avgVol = vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 || 1;
-    const volRatio = +(vols[vols.length - 1] / avgVol).toFixed(2);
-
-    const swingHigh = Math.max(...highs.slice(-35));
-    const swingLow = Math.min(...lows.slice(-35));
-    const fibRetraceFromHigh = swingHigh > swingLow ? (swingHigh - last) / (swingHigh - swingLow) : 0.5;
+    // Anti-exhaustion filter: Never LONG overbought (>67) or SHORT oversold (<33)
     const distFromEma20Pct = Math.abs(last - ema20) / ema20;
+    if (distFromEma20Pct > 0.026) return null;
 
-    // STRICT ANTI-LOSS RULES:
-    // 1. Both LTF & HTF must align in the same direction
-    // 2. Price must NOT be overextended (>2.5% away from EMA20)
-    // 3. RSI must be in safe continuation zone (LONG: 42-64, SHORT: 36-58) — never buy overbought >68 or sell oversold <32!
-    // 4. Last candle must confirm bounce in trade direction
-    let validDirection = null;
-    let setupScore = 0;
-    let method = '';
+    const { results, volRatio } = evaluate6Methods(closes, opens, highs, lows, vols, ema20, ema50, htfBull, htfBear);
+    const matchedKeys = Object.keys(results);
+    if (!matchedKeys.length) return null;
 
-    if (htfBull && ema20 > ema50 && last >= ema50 && rsi >= 42 && rsi <= 65 && distFromEma20Pct <= 0.022 && bullCandle) {
-      validDirection = 'LONG';
-      setupScore = 78;
-      if (fibRetraceFromHigh >= 0.35 && fibRetraceFromHigh <= 0.68) {
-        setupScore += 10;
-        method = `MTF (${htf}+${tf}) Fibonacci Pullback + EMA20 Bounce`;
-      } else {
-        method = `MTF (${htf}+${tf}) Bullish Order Block + EMA Alignment`;
-      }
-      if (volRatio >= 1.15) setupScore += 5;
-    } else if (htfBear && ema20 < ema50 && last <= ema50 && rsi >= 35 && rsi <= 58 && distFromEma20Pct <= 0.022 && bearCandle) {
-      validDirection = 'SHORT';
-      setupScore = 78;
-      if (fibRetraceFromHigh >= 0.32 && fibRetraceFromHigh <= 0.65) {
-        setupScore += 10;
-        method = `MTF (${htf}+${tf}) Bearish Supply Pullback + EMA20 Rejection`;
-      } else {
-        method = `MTF (${htf}+${tf}) Bearish Structure + EMA Alignment`;
-      }
-      if (volRatio >= 1.15) setupScore += 5;
+    let chosenDir = null;
+    let finalScore = 0;
+    let methodLabel = '';
+    let matchedList = [];
+
+    if (strategyMode !== 'ALL') {
+      const specific = results[strategyMode];
+      if (!specific) return null;
+      chosenDir = specific.dir;
+      finalScore = specific.score;
+      methodLabel = specific.label;
+      matchedList = [strategyMode];
+    } else {
+      const longMethods = matchedKeys.filter(k => results[k].dir === 'LONG');
+      const shortMethods = matchedKeys.filter(k => results[k].dir === 'SHORT');
+      const winKeys = longMethods.length >= shortMethods.length ? longMethods : shortMethods;
+      if (!winKeys.length) return null;
+
+      chosenDir = results[winKeys[0]].dir;
+      matchedList = winKeys;
+      const topSingle = Math.max(...winKeys.map(k => results[k].score));
+      // Add +3 confluence bonus for each additional confirming method among the 6
+      finalScore = Math.min(98, topSingle + (winKeys.length - 1) * 3);
+      const primaryLabel = results[winKeys[0]].label;
+      methodLabel = winKeys.length > 1
+        ? `Confluence (${winKeys.join(' + ')}): ${primaryLabel}`
+        : primaryLabel;
     }
 
-    if (!validDirection) return null;
+    if (chosenDir === 'LONG' && (rsi < 40 || rsi > 66)) return null;
+    if (chosenDir === 'SHORT' && (rsi < 34 || rsi > 60)) return null;
 
-    // ATR-based Dynamic Stop Loss (wide enough to survive normal noise, min 1.4%, max 2.8%)
     const atrPct = atr / last;
     const slPct = Math.min(0.028, Math.max(0.014, atrPct * 1.8));
-    const tpPct = slPct * 2.1; // Clean 1:2.1 Risk-Reward
+    const tpPct = slPct * 2.2;
     const dec = last >= 100 ? 2 : last >= 1 ? 4 : 5;
 
     const entry = +last.toFixed(dec);
-    const sl = +(validDirection === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
-    const tp = +(validDirection === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
+    const sl = +(chosenDir === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
+    const tp = +(chosenDir === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
 
     return {
       coin,
-      direction: validDirection,
-      method,
+      direction: chosenDir,
+      method: methodLabel,
+      matchedMethods: matchedList,
       rsi,
       htfTrend: htfBull ? `${htf} BULLISH` : `${htf} BEARISH`,
       ltfTrend: ema20 > ema50 ? `${tf} BULLISH` : `${tf} BEARISH`,
       volRatio: `${volRatio}x Avg`,
-      indicators: `HTF: ${htfBull ? 'Bull' : 'Bear'} | RSI: ${rsi} | Vol: ${volRatio}x | ATR SL: ${(slPct * 100).toFixed(2)}%`,
+      indicators: `Methods (${matchedList.length}/6): ${matchedList.join(',')} | HTF: ${htfBull ? 'Bull' : 'Bear'} | RSI: ${rsi} | Vol: ${volRatio}x | RR: 1:2.2`,
       entry,
       sl,
       tp,
-      rr: '1:2.1',
-      confidence: Math.min(95, setupScore),
-      reason: `Confirmed ${htf} + ${tf} trend alignment with safe pullback entry near EMA20 (RSI ${rsi}, no exhaustion) and ATR-protected Stop Loss.`
+      rr: '1:2.2',
+      confidence: finalScore,
+      reason: `Verified by ${matchedList.length} institutional method(s) [${matchedList.join(' + ')}] with ${htf}+${tf} trend alignment, safe RSI (${rsi}), and ATR-protected Stop Loss.`
     };
   } catch (e) {
     return null;
   }
 }
 
-async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m') {
+async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL') {
   const [r, cMap] = await Promise.all([
     fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
     getContractMap()
@@ -226,11 +309,10 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
 
-  // Filter liquid Top 30 USDT coins, avoiding extreme pump/dump traps (>16% 24h)
   const candidates = all
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
     .sort((a, b) => Number(b.quoteVolume) - Number(a.quoteVolume))
-    .slice(0, 35)
+    .slice(0, 36)
     .map(t => {
       const coin = t.symbol.replace('USDT', '');
       const sym = `${coin}_USDT`;
@@ -241,13 +323,12 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
       return { coin, symbol: sym, price, chgNum: chg, change24h: chg.toFixed(2) + '%', minContractUsdt };
     })
     .filter(c => c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 16)
-    .slice(0, 22);
+    .slice(0, 24);
 
   const verified = [];
-  // Run deep MTF + Pullback analysis in parallel batches
   for (let i = 0; i < candidates.length; i += 6) {
     const batch = candidates.slice(i, i + 6);
-    const res = await Promise.all(batch.map(c => analyzeCoinDeep(c.coin, timeframe)));
+    const res = await Promise.all(batch.map(c => analyzeCoinDeep(c.coin, timeframe, strategyMode)));
     res.forEach((setup, idx) => {
       if (setup) {
         setup.change24h = batch[idx].change24h;
@@ -260,17 +341,15 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   return verified.sort((a, b) => b.confidence - a.confidence);
 }
 
-// Conservative Auto-Leverage (caps at 5x - 12x unless tiny contract requires slightly higher)
 function calcSafeAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
   const minLevForContract = Math.ceil((minContractUsdt * 1.08) / Math.max(0.5, marginUsdt));
   const slPct = Math.abs(entry - sl) / (entry || 1);
-  // Risk only ~15% of margin at Stop-Loss so liquidation is very far away
-  const safeLev = slPct > 0 ? Math.round(0.15 / slPct) : 8;
+  const safeLev = slPct > 0 ? Math.round(0.16 / slPct) : 8;
   const capped = Math.min(12, Math.max(5, safeLev));
   return Math.min(maxLev, Math.max(minLevForContract, capped));
 }
 
-async function confirmWithGemini(verifiedSetups, timeframe) {
+async function confirmWithGemini(verifiedSetups, timeframe, strategyMode) {
   const topRadar = verifiedSetups.slice(0, 3).map(x => ({
     coin: x.coin,
     direction: x.direction,
@@ -283,12 +362,12 @@ async function confirmWithGemini(verifiedSetups, timeframe) {
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
   if (!geminiKey || verifiedSetups.length === 1) return best;
 
-  const prompt = `You are a strict institutional Risk-First Crypto Futures AI Agent.
-These setups have ALREADY passed Multi-Timeframe (HTF + ${timeframe}) EMA alignment, RSI safe-zone (no overbought/oversold chasing), and ATR Stop-Loss checks:
+  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the World's Top 6 Trading Methods (SMC, ICT, Fibonacci, Chart Patterns, Elliott Wave, Wyckoff VSA).
+Strategy Mode Requested: ${strategyMode} | Timeframe: ${timeframe}
+These setups have ALREADY passed Multi-Timeframe trend alignment, RSI safe-zone, and institutional method checks:
 ${JSON.stringify(verifiedSetups.slice(0, 5))}
 
-Pick the SINGLE SAFEST setup with the highest probability of hitting Take-Profit without hitting Stop-Loss.
-Keep its exact entry, sl, and tp values, or refine them slightly for safety.
+Pick the SINGLE SAFEST setup with the highest confluence and probability of hitting Take-Profit without hitting Stop-Loss.
 Respond ONLY with raw JSON:
 {
   "coin": "COIN",
@@ -298,8 +377,8 @@ Respond ONLY with raw JSON:
   "entry": 0.0,
   "sl": 0.0,
   "tp": 0.0,
-  "confidence": 88,
-  "reason": "2-sentence explanation of why this MTF pullback setup is the safest trade right now."
+  "confidence": 92,
+  "reason": "2-sentence explanation of why this 6-method confluence setup is the highest-probability trade right now."
 }`;
 
   try {
@@ -371,10 +450,11 @@ async function notifyTelegram(pick, exec, marginUsdt) {
   const token = process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
-  const text = `🤖🛡️ SAFE MTF AI FUTURES TRADE\n` +
+  const text = `🤖🏆 6-METHOD AI FUTURES TRADE EXECUTED\n` +
     `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
     `Method: ${pick.method}\n` +
     `Indicators: ${pick.indicators}\n` +
+    `Margin: $${marginUsdt} USDT (Size: $${exec.notional})\n` +
     `Entry: ${pick.entry} | SL: ${pick.sl} | TP: ${pick.tp}\n` +
     `Confidence: ${pick.confidence}%\n` +
     `Reason: ${pick.reason}`;
@@ -455,6 +535,7 @@ module.exports = async (req, res) => {
       const reqLeverage = Math.min(25, Math.max(1, Number(body.leverage) || 8));
       const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
+      const strategyMode = body.strategyMode || 'ALL';
       const maxOpen = Math.max(1, Number(body.maxOpen) || 2);
 
       const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
@@ -466,16 +547,15 @@ module.exports = async (req, res) => {
       const maxLookupLev = autoLeverage ? 15 : reqLeverage;
       const maxContractUsdt = marginUsdt * maxLookupLev;
 
-      const verifiedSetups = await scanHighProbabilitySetups(maxContractUsdt, excludeSymbols, timeframe);
+      const verifiedSetups = await scanHighProbabilitySetups(maxContractUsdt, excludeSymbols, timeframe, strategyMode);
 
-      // STRICT NO-TRADE PROTECTION: Do not force a trade if the market has no clean MTF pullback setup!
       if (!verifiedSetups.length || verifiedSetups[0].confidence < 80) {
         return res.status(400).json({
-          error: '⏸️ AI Protection Active: No high-probability MTF pullback setup right now (Market is choppy/overextended). Capital protected — try scanning again in 15 mins.'
+          error: `⏸️ AI Protection Active: No high-probability ${strategyMode === 'ALL' ? '6-Method Confluence' : strategyMode} setup right now. Capital protected — try scanning again in 15 mins.`
         });
       }
 
-      const pick = await confirmWithGemini(verifiedSetups, timeframe);
+      const pick = await confirmWithGemini(verifiedSetups, timeframe, strategyMode);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
       await notifyTelegram(pick, exec, marginUsdt);
 
