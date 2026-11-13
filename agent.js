@@ -18,7 +18,7 @@ if ($('scrim')) $('scrim').onclick = () => tg(0);
 
 const savedCfg = ls.get('mexcAgentCfg', {
   sec: '', stratMode: 'ALL25', walletMode: 'grow10', margin: 3.5, autoLev: 'auto', lev: 20, tf: '15m',
-  dailyProfitGoal: 10, dailyLossLimit: 4, tpRoe: 30, trailRoe: 14, slRoe: 25
+  dailyProfitGoal: 10, dailyLossLimit: 4, tpRoe: 30, partialTpRoe: 18, trailRoe: 14, beRoe: 6, slRoe: 25
 });
 $('sec').value = savedCfg.sec || '';
 if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL25';
@@ -30,7 +30,9 @@ $('tf').value = savedCfg.tf || '15m';
 $('dailyProfitGoal').value = savedCfg.dailyProfitGoal != null ? savedCfg.dailyProfitGoal : 10;
 $('dailyLossLimit').value = savedCfg.dailyLossLimit != null ? savedCfg.dailyLossLimit : 4;
 $('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 30;
+if ($('partialTpRoe')) $('partialTpRoe').value = savedCfg.partialTpRoe != null ? savedCfg.partialTpRoe : 18;
 $('trailRoe').value = savedCfg.trailRoe != null ? savedCfg.trailRoe : 14;
+if ($('beRoe')) $('beRoe').value = savedCfg.beRoe != null ? savedCfg.beRoe : 6;
 $('slRoe').value = savedCfg.slRoe != null ? savedCfg.slRoe : 25;
 
 function toggleInputs() {
@@ -54,11 +56,13 @@ const saveCfg = () => {
     dailyProfitGoal: +$('dailyProfitGoal').value || 0,
     dailyLossLimit: +$('dailyLossLimit').value || 0,
     tpRoe: +$('tpRoe').value || 0,
+    partialTpRoe: $('partialTpRoe') ? +$('partialTpRoe').value : 18,
     trailRoe: +$('trailRoe').value || 0,
+    beRoe: $('beRoe') ? +$('beRoe').value : 6,
     slRoe: +$('slRoe').value || 0
   });
 };
-['sec', 'stratMode', 'walletMode', 'margin', 'autoLev', 'lev', 'tf', 'dailyProfitGoal', 'dailyLossLimit', 'tpRoe', 'trailRoe', 'slRoe'].forEach(id => {
+['sec', 'stratMode', 'walletMode', 'margin', 'autoLev', 'lev', 'tf', 'dailyProfitGoal', 'dailyLossLimit', 'tpRoe', 'partialTpRoe', 'trailRoe', 'beRoe', 'slRoe'].forEach(id => {
   if ($(id)) $(id).onchange = saveCfg;
 });
 
@@ -155,24 +159,54 @@ async function loadChartCoin(coin, levels = null) {
 
 let autoPilot = false, closingIds = new Set(), isScanning = false, lastScanAttempt = 0, lastAvailBal = 10;
 let peakRoeMap = ls.get('mexcPeakRoe', {});
+let partialClosedMap = ls.get('mexcPartialMap', {});
+let cooldownMap = ls.get('mexcCooldownMap', {});
 let lastTrackedPositions = ls.get('mexcLastPos', {});
+
+// UPDATE #5 & #10: Calculate Win/Loss Streak for Sniper Mode & Compounding Booster
+function getStreakInfo() {
+  const closed = ls.get('mexcClosedTrades', []);
+  let winStreak = 0, lossStreak = 0;
+  for (const c of closed) {
+    if (Number(c.pnl) > 0) {
+      if (lossStreak > 0) break;
+      winStreak++;
+    } else {
+      if (winStreak > 0) break;
+      lossStreak++;
+    }
+  }
+  return { winStreak, lossStreak };
+}
 
 function calcSmartMargin(availBal) {
   const wMode = $('walletMode').value;
-  if (wMode === 'fixed') return Math.max(0.5, +$('margin').value || 3.5);
-  if (wMode === 'auto20') return Math.max(0.5, +(availBal * 0.20).toFixed(2));
-  if (wMode === 'grow10') {
-    // $10 Account Growth Mode: Uses 35% of live balance ($3.50 on $10, scales up automatically as profit grows)
-    return Math.max(0.5, +(availBal * 0.35).toFixed(2));
+  const { winStreak, lossStreak } = getStreakInfo();
+  // Update #10: +10% Margin Booster on 2+ Win Streak, -15% reduction on 2+ Loss Streak
+  const streakMult = winStreak >= 2 ? 1.10 : lossStreak >= 2 ? 0.85 : 1.0;
+
+  let base = 1;
+  if (wMode === 'fixed') base = Math.max(0.5, +$('margin').value || 3.5);
+  else if (wMode === 'auto20') base = availBal * 0.20;
+  else if (wMode === 'grow10') {
+    base = availBal <= 3 ? availBal * 0.70 : availBal * 0.35;
+  } else {
+    base = availBal <= 3 ? availBal * 0.70 : availBal * 0.25;
   }
-  if (availBal <= 3) return Math.max(0.5, +(availBal * 0.70).toFixed(2));
-  return Math.max(0.5, +(availBal * 0.25).toFixed(2));
+  return Math.min(availBal * 0.90, Math.max(0.5, +(base * streakMult).toFixed(2)));
 }
 
 function recordClosedTrade(pos, exitReason) {
   const closed = ls.get('mexcClosedTrades', []);
   if (closed.some(c => c.positionId === pos.positionId)) return;
   const pnlVal = Number(pos.pnl || 0);
+
+  // UPDATE #4: If trade closed in loss, put coin on 30-min Anti-Whipsaw Cooldown
+  if (pnlVal < 0 && pos.symbol) {
+    cooldownMap[pos.symbol] = Date.now() + 30 * 60 * 1000;
+    ls.set('mexcCooldownMap', cooldownMap);
+  }
+
   closed.unshift({
     positionId: pos.positionId,
     time: Date.now(),
@@ -199,8 +233,15 @@ function renderAnalytics() {
   const losses = closed.filter(c => c.pnl <= 0);
   const winRate = closed.length ? ((wins.length / closed.length) * 100).toFixed(1) : '0.0';
   const netPnl = closed.reduce((s, c) => s + Number(c.pnl || 0), 0);
+  const { winStreak, lossStreak } = getStreakInfo();
 
-  $('STATS').innerHTML = `<h3>📊 Daily $${goal} USDT Profit Target &amp; Win-Rate Dashboard</h3>
+  const modeBadge = lossStreak >= 2
+    ? `<span class="tag down">🎯 Sniper Recovery Active</span>`
+    : winStreak >= 2
+    ? `<span class="tag up">🔥 +10% Win-Streak Boost</span>`
+    : `<span class="tag">⚡ Standard Matrix</span>`;
+
+  $('STATS').innerHTML = `<h3>📊 Daily $${goal} USDT Profit Target, Streak &amp; Win-Rate Dashboard</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:8px">
       <div style="background:rgba(46,204,154,0.08);padding:10px;border-radius:8px;border:1px solid #2ecc9a">
         <small class="msg">Today's Goal ($${goal} USDT)</small><br>
@@ -209,6 +250,9 @@ function renderAnalytics() {
       </div>
       <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
         <small class="msg">Win Rate %</small><br><b class="up" style="font-size:1.3em">${winRate}%</b><br><small>${wins.length}W / ${losses.length}L</small>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
+        <small class="msg">AI Streak Status</small><br>${modeBadge}<br><small>Win Streak: ${winStreak} | Loss: ${lossStreak}</small>
       </div>
       <div style="background:rgba(255,255,255,0.04);padding:10px;border-radius:8px;border:1px solid var(--line)">
         <small class="msg">All-Time Net PnL</small><br><b class="${netPnl >= 0 ? 'up' : 'down'}" style="font-size:1.3em">${netPnl >= 0 ? '+' : ''}$${netPnl.toFixed(3)}</b><br><small>${closed.length} Closed</small>
@@ -232,7 +276,7 @@ function renderAiBrain() {
       <div style="background:rgba(56,189,248,0.08);border:1px solid #38bdf8;border-radius:8px;padding:10px">
         <b>🎯 Selected Trade: ${latest.coin}_USDT <span class="tag ${latest.direction === 'LONG' ? 'up' : 'down'}">${latest.direction} (${latest.leverage}x)</span></b>
         <p style="margin:6px 0"><b>🏆 Confluence Score:</b> <span style="color:#f0b429;font-weight:700">${latest.method || '25-Method'}</span></p>
-        <p style="margin:6px 0"><b>📊 Pillars &amp; BTC:</b> <small>${latest.indicators || ''}</small></p>
+        <p style="margin:6px 0"><b>📊 Pro Filters:</b> <small>${latest.indicators || ''}</small></p>
         ${badges ? `<div style="margin:6px 0">${badges}</div>` : ''}
         <p style="margin:6px 0"><small>${latest.reason}</small></p>
       </div>
@@ -265,9 +309,10 @@ function renderLogs() {
     </tr>`).join('') + '</table>';
 }
 
-async function closePositionApi(p, reasonLabel = 'Closed') {
-  if (closingIds.has(p.positionId)) return;
-  closingIds.add(p.positionId);
+async function closePositionApi(p, reasonLabel = 'Closed', partialVol = null) {
+  const key = partialVol ? `${p.positionId}_part` : p.positionId;
+  if (closingIds.has(key)) return;
+  closingIds.add(key);
   try {
     await fetch('/api/futures-agent', {
       method: 'POST',
@@ -278,15 +323,19 @@ async function closePositionApi(p, reasonLabel = 'Closed') {
         symbol: p.symbol,
         positionId: p.positionId,
         direction: p.direction,
-        vol: p.holdVol
+        vol: partialVol || p.holdVol
       })
     });
-    recordClosedTrade(p, reasonLabel);
-    delete peakRoeMap[p.positionId];
-    ls.set('mexcPeakRoe', peakRoeMap);
-    $('statusMsg').innerHTML = `<span class="up">🛡️ Closed ${p.symbol} (${reasonLabel} at ${p.roe}% ROE)!</span>`;
+    if (!partialVol) {
+      recordClosedTrade(p, reasonLabel);
+      delete peakRoeMap[p.positionId];
+      delete partialClosedMap[p.positionId];
+      ls.set('mexcPeakRoe', peakRoeMap);
+      ls.set('mexcPartialMap', partialClosedMap);
+    }
+    $('statusMsg').innerHTML = `<span class="up">🛡️ ${reasonLabel} on ${p.symbol} (at ${p.roe}% ROE)!</span>`;
   } catch (e) {}
-  closingIds.delete(p.positionId);
+  closingIds.delete(key);
 }
 
 function isDailyGuardStopped() {
@@ -312,7 +361,7 @@ function isDailyGuardStopped() {
       $('autoToggleBtn').style.background = '#f0b429';
     }
     $('resetBreakerBtn').style.display = 'inline-block';
-    $('statusMsg').innerHTML = `<span class="down">🛑 DAILY LOSS LIMIT HIT ($${dailyPnl.toFixed(2)} / -$${lossLimit} USDT). Auto-Pilot paused to protect your $10 wallet!</span>`;
+    $('statusMsg').innerHTML = `<span class="down">🛑 DAILY LOSS LIMIT HIT ($${dailyPnl.toFixed(2)} / -$${lossLimit} USDT). Auto-Pilot paused to protect your wallet!</span>`;
     return true;
   }
 
@@ -350,6 +399,7 @@ async function refreshStatus() {
       if (!currentIds.has(oldId) && !currentIds.has(Number(oldId))) {
         recordClosedTrade(lastTrackedPositions[oldId], 'Exchange TP/SL Hit');
         delete peakRoeMap[oldId];
+        delete partialClosedMap[oldId];
       }
     });
     const nextTracked = {};
@@ -358,8 +408,10 @@ async function refreshStatus() {
     ls.set('mexcLastPos', lastTrackedPositions);
 
     const tpTarget = +$('tpRoe').value || 0;
+    const partialTp = $('partialTpRoe') ? +$('partialTpRoe').value : 18;
     const slLimit = +$('slRoe').value || 0;
     const trailActivate = +$('trailRoe').value || 0;
+    const beActivate = $('beRoe') ? +$('beRoe').value : 6;
 
     for (const p of d.positions) {
       const roeNum = Number(p.roe);
@@ -369,14 +421,34 @@ async function refreshStatus() {
         ls.set('mexcPeakRoe', peakRoeMap);
       }
       const peak = Math.max(prevPeak, roeNum);
-      const trailFloor = peak >= trailActivate && trailActivate > 0 ? Math.max(3, peak - 5) : null;
+
+      // UPDATE #6: Partial Take-Profit (TP1 50% Close when contracts >= 2)
+      if (partialTp > 0 && roeNum >= partialTp && p.holdVol >= 2 && !partialClosedMap[p.positionId]) {
+        const halfVol = Math.floor(p.holdVol / 2);
+        if (halfVol >= 1) {
+          partialClosedMap[p.positionId] = true;
+          ls.set('mexcPartialMap', partialClosedMap);
+          await closePositionApi(p, `TP1 50% Partial Profit Lock (+${roeNum.toFixed(1)}%)`, halfVol);
+        }
+      }
+
+      // UPDATE #1 & #2: Trailing Stop-Loss + Auto Break-Even Shield (+6% ROE -> Locks at +1.5% ROE)
+      const trailFloor = peak >= trailActivate && trailActivate > 0
+        ? Math.max(3, peak - 5)
+        : (peak >= beActivate && beActivate > 0 ? 1.5 : null);
+
+      // UPDATE #8: Stagnant Trade Time-Stop (Close after 120 mins if stuck between -2% and +3% ROE)
+      const ageMins = p.openTime ? (Date.now() - Number(p.openTime)) / 60000 : 0;
+      const isStagnant = ageMins >= 120 && roeNum >= -2 && roeNum <= 3;
 
       if (tpTarget > 0 && roeNum >= tpTarget) {
-        await closePositionApi(p, `TP Target +${tpTarget}%`);
+        await closePositionApi(p, `Full TP Target +${tpTarget}%`);
       } else if (trailFloor !== null && roeNum <= trailFloor) {
-        await closePositionApi(p, `Trailing SL Lock (+${peak.toFixed(1)}% -> +${roeNum.toFixed(1)}%)`);
+        await closePositionApi(p, `Profit Shield Lock (Peak +${peak.toFixed(1)}% -> +${roeNum.toFixed(1)}%)`);
       } else if (slLimit > 0 && roeNum <= -Math.abs(slLimit)) {
         await closePositionApi(p, `SL Guardian -${Math.abs(slLimit)}%`);
+      } else if (isStagnant) {
+        await closePositionApi(p, `Time-Stop (120m Stagnant Trade Freed)`);
       }
     }
 
@@ -387,19 +459,22 @@ async function refreshStatus() {
       }
     } else {
       const logs = ls.get('mexcAgentLogs', []);
-      $('POS').innerHTML = `<h3>⚡ Live MEXC Futures Positions (Trailing SL &amp; Guardian Active)</h3>
+      $('POS').innerHTML = `<h3>⚡ Live MEXC Futures Positions (Break-Even, Partial TP1 &amp; Trailing SL Active)</h3>
         <table>
-          <tr><th>Contract</th><th>Side / Lev</th><th>Margin</th><th>Peak / Trail</th><th>Live PnL</th><th>Action</th></tr>
+          <tr><th>Contract</th><th>Side / Lev</th><th>Margin</th><th>Peak / Shield</th><th>Live PnL</th><th>Action</th></tr>
           ${d.positions.map(p => {
             const isProfit = Number(p.pnl) >= 0;
             const peak = Number(peakRoeMap[p.positionId] || p.roe);
-            const trailActivate = +$('trailRoe').value || 0;
-            const trailActive = trailActivate > 0 && peak >= trailActivate;
+            const shieldStatus = peak >= trailActivate
+              ? `<span class="tag up">🔒 Trail Locked</span>`
+              : peak >= beActivate
+              ? `<span class="tag up">🛡️ Break-Even Active</span>`
+              : `<small class="msg">BE at +${beActivate}%</small>`;
             return `<tr>
               <td><b><a href="#agentChart" class="chartCoinLink" data-coin="${p.coin}" style="color:#38bdf8">${p.symbol} 📈</a></b><br><small>${p.entryPrice} → ${p.markPrice}</small></td>
               <td><span class="tag ${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction}</span> <b>${p.leverage}x</b></td>
               <td>$${p.margin}</td>
-              <td>Peak: <b>${peak.toFixed(1)}%</b><br>${trailActive ? `<span class="tag up">🔒 Locked</span>` : `<small class="msg">At +${trailActivate}%</small>`}</td>
+              <td>Peak: <b>${peak.toFixed(1)}%</b><br>${shieldStatus}</td>
               <td class="${isProfit ? 'up' : 'down'}"><b>${isProfit ? '+' : ''}$${p.pnl} (${isProfit ? '+' : ''}${p.roe}%)</b></td>
               <td><button class="moreBtn closeBtn" data-sym="${p.symbol}" data-id="${p.positionId}" data-dir="${p.direction}" data-vol="${p.holdVol}" style="margin:0;padding:4px 8px">Close</button></td>
             </tr>`;
@@ -440,9 +515,14 @@ async function runAgentTrade(isAutoLoop = false) {
   const smartMargin = calcSmartMargin(lastAvailBal);
   const isAutoLev = $('autoLev').value === 'auto';
   const stratMode = $('stratMode') ? $('stratMode').value : 'ALL25';
+  const { lossStreak } = getStreakInfo();
+
+  // Clean expired 30-min cooldown coins
+  const now = Date.now();
+  const activeCooldowns = Object.keys(cooldownMap).filter(sym => cooldownMap[sym] > now);
 
   if (!isAutoLoop) $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Auto-Managing ($${smartMargin} USDT) &amp; Scanning 25 Methods for $10/Day Target...</b>`;
+  $('statusMsg').innerHTML = `🤖 <b>Scanning 25 Methods + 10 Pro Filters ($${smartMargin} USDT Margin)...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -456,6 +536,8 @@ async function runAgentTrade(isAutoLoop = false) {
         autoLeverage: isAutoLev,
         leverage: +$('lev').value || 20,
         timeframe: $('tf').value,
+        sniperRecovery: lossStreak >= 2,
+        cooldownCoins: activeCooldowns,
         maxOpen: 1
       })
     });
