@@ -116,11 +116,10 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
-// --- UPDATE #3: BTC MARKET REGIME FILTER ---
 async function getBtcMarketRegime(tf = '15m') {
   try {
     const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${tf}&limit=60`);
-    if (!r.ok) return { regime: 'NEUTRAL', allowLong: true, allowShort: true, change1hPct: 0 };
+    if (!r.ok) return { regime: 'NEUTRAL', allowLong: true, allowShort: true, suddenMovePct: 0 };
     const raw = await r.json();
     const closes = raw.map(x => +x[4]);
     const ema20 = calcEMAVal(closes, 20);
@@ -129,9 +128,7 @@ async function getBtcMarketRegime(tf = '15m') {
     const prev4 = closes[closes.length - 5] || last;
     const suddenMovePct = ((last - prev4) / prev4) * 100;
 
-    // Block Altcoin LONG if BTC is crashing (>1.3% sudden drop or bearish below both EMAs)
     const btcDumping = suddenMovePct <= -1.3 || (last < ema20 && ema20 < ema50 && suddenMovePct < -0.5);
-    // Block Altcoin SHORT if BTC is squeezing upward (>1.3% sudden pump or bullish above both EMAs)
     const btcPumping = suddenMovePct >= 1.3 || (last > ema20 && ema20 > ema50 && suddenMovePct > 0.5);
 
     let regime = 'BALANCED';
@@ -383,7 +380,6 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
     else if (htfBear && votes.SHORT.length > votes.LONG.length) dir = 'SHORT';
     if (!dir) return null;
 
-    // Enforce BTC Market Regime Filter for Altcoins
     if (coin !== 'BTC') {
       if (dir === 'LONG' && !btcRegime.allowLong) return null;
       if (dir === 'SHORT' && !btcRegime.allowShort) return null;
@@ -404,7 +400,7 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime 
 
     const confidence = Math.min(98, Math.round(62 + methodCount * 1.45));
     const atrPct = atr / last;
-    const slPct = Math.min(0.028, Math.max(0.014, atrPct * 1.8));
+    const slPct = Math.min(0.025, Math.max(0.012, atrPct * 1.6));
     const tpPct = slPct * 2.2;
     const dec = last >= 100 ? 2 : last >= 1 ? 4 : 5;
 
@@ -473,12 +469,13 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   return { setups: verified.sort((a, b) => b.confidence - a.confidence), btcRegime };
 }
 
-function calcSafeAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
+function calcSmartTargetLeverage(marginUsdt, minContractUsdt, entry, sl, confidence = 85, maxLev = 50) {
   const minLevForContract = Math.ceil((minContractUsdt * 1.08) / Math.max(0.5, marginUsdt));
   const slPct = Math.abs(entry - sl) / (entry || 1);
-  const safeLev = slPct > 0 ? Math.round(0.16 / slPct) : 8;
-  const capped = Math.min(12, Math.max(5, safeLev));
-  return Math.min(maxLev, Math.max(minLevForContract, capped));
+  const idealLev = slPct > 0 ? Math.round(0.28 / slPct) : 18;
+  const maxSafeCap = confidence >= 86 ? 20 : 15;
+  const bounded = Math.min(maxSafeCap, Math.max(12, idealLev));
+  return Math.min(maxLev, Math.max(minLevForContract, bounded));
 }
 
 async function confirmWithGemini(verifiedSetups, timeframe) {
@@ -553,7 +550,7 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
   const minContractUsdt = price * contractSize;
 
   const leverage = autoLeverage
-    ? calcSafeAutoLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), maxLev)
+    ? calcSmartTargetLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), pick.confidence, maxLev)
     : Math.min(maxLev, Math.max(1, reqLeverage));
 
   const notional = marginUsdt * leverage;
@@ -583,8 +580,7 @@ async function notifyTelegram(pick, exec, marginUsdt, source = 'WEB') {
   const text = `🤖🏆 25-METHOD AI TRADE (${source})\n` +
     `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
     `Confluence: ${pick.method}\n` +
-    `Pillars: ${pick.indicators}\n` +
-    `Margin: $${marginUsdt} USDT (Size: $${exec.notional})\n` +
+    `Margin: $${marginUsdt.toFixed(2)} USDT (Size: $${exec.notional})\n` +
     `Entry: ${pick.entry} | SL: ${pick.sl} | TP: ${pick.tp}\n` +
     `Reason: ${pick.reason}`;
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -599,25 +595,25 @@ module.exports = async (req, res) => {
     const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) : req.query;
     const action = body.action || 'status';
 
-    // --- UPDATE #4: SERVER-SIDE 24/7 VERCEL CRON HANDLER ---
     if (action === 'cron_tick') {
-      const cronAuth = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-      const cronSecret = (process.env.CRON_SECRET || process.env.AGENT_SECRET || '').trim();
-      if (cronSecret && cronAuth && cronAuth !== cronSecret) {
-        return res.status(401).json({ error: 'Unauthorized Cron Tick' });
-      }
-      const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
+      const [openPos, assets] = await Promise.all([
+        mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
+        mexcReq('GET', '/api/v1/private/account/assets').catch(() => [])
+      ]);
       if ((openPos || []).length >= 1) {
-        return res.status(200).json({ ok: true, status: 'Active position already open, skipping cron entry.' });
+        return res.status(200).json({ ok: true, status: 'Active position already open.' });
       }
-      const marginUsdt = Math.max(0.5, Number(process.env.CRON_MARGIN_USDT) || 1);
-      const { setups, btcRegime } = await scanHighProbabilitySetups(marginUsdt * 15, [], '15m', 'ALL25', true);
+      const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 10 };
+      const avail = Number(usdtAsset.availableBalance || 10);
+      const autoMargin = Math.min(25, Math.max(0.5, +(avail * 0.35).toFixed(2)));
+
+      const { setups, btcRegime } = await scanHighProbabilitySetups(autoMargin * 20, [], '15m', 'ALL25', true);
       if (!setups.length || setups[0].confidence < 80) {
         return res.status(200).json({ ok: true, status: 'No 25-method setup passed filter right now.', btcRegime });
       }
       const pick = await confirmWithGemini(setups, '15m');
-      const exec = await openFuturesPosition(pick, marginUsdt, 10, true);
-      await notifyTelegram(pick, exec, marginUsdt, '24/7 SERVER CRON');
+      const exec = await openFuturesPosition(pick, autoMargin, 18, true);
+      await notifyTelegram(pick, exec, autoMargin, '24/7 AUTO-WALLET CRON');
       return res.status(200).json({ ok: true, executed: exec, pick });
     }
 
@@ -683,21 +679,34 @@ module.exports = async (req, res) => {
     }
 
     if (action === 'scan_and_trade') {
-      const marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 1);
-      const reqLeverage = Math.min(25, Math.max(1, Number(body.leverage) || 8));
+      const [openPos, assets] = await Promise.all([
+        mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
+        mexcReq('GET', '/api/v1/private/account/assets').catch(() => [])
+      ]);
+
+      const maxOpen = Math.max(1, Number(body.maxOpen) || 1);
+      if ((openPos || []).length >= maxOpen) {
+        return res.status(400).json({ error: `Max Open Positions limit (${maxOpen}) reached. Waiting for current trade to finish.` });
+      }
+
+      const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 0 };
+      const availBal = Number(usdtAsset.availableBalance || 0);
+
+      if (availBal < 0.5) {
+        return res.status(400).json({ error: `Insufficient MEXC Futures USDT balance ($${availBal.toFixed(2)}). Minimum $0.50 required.` });
+      }
+
+      let marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 3.5);
+      marginUsdt = Math.min(availBal * 0.95, marginUsdt);
+
+      const reqLeverage = Math.min(30, Math.max(1, Number(body.leverage) || 20));
       const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
       const strategyMode = body.strategyMode || 'ALL25';
       const useBtcFilter = body.useBtcFilter !== false;
-      const maxOpen = Math.max(1, Number(body.maxOpen) || 1);
-
-      const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
-      if ((openPos || []).length >= maxOpen) {
-        return res.status(400).json({ error: `Max Open Positions limit (${maxOpen}) reached. Waiting for current trade to finish.` });
-      }
       const excludeSymbols = (openPos || []).map(p => p.symbol);
 
-      const maxLookupLev = autoLeverage ? 15 : reqLeverage;
+      const maxLookupLev = autoLeverage ? 20 : reqLeverage;
       const maxContractUsdt = marginUsdt * maxLookupLev;
 
       const { setups, btcRegime } = await scanHighProbabilitySetups(
@@ -712,12 +721,13 @@ module.exports = async (req, res) => {
 
       const pick = await confirmWithGemini(setups, timeframe);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
-      await notifyTelegram(pick, exec, marginUsdt, 'AUTO-AGENT');
+      await notifyTelegram(pick, exec, marginUsdt, '$10/DAY GOAL AGENT');
 
       return res.status(200).json({
         ok: true,
         pick,
         exec,
+        usedMargin: +marginUsdt.toFixed(2),
         btcRegime,
         timestamp: Date.now()
       });
