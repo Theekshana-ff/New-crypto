@@ -1,18 +1,17 @@
-name: 24/7 Cloud Sniper AI Auto-Pilot
+name: 24/7 Cloud Crypto Intelligence Auto-Pilot
 on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
-  cloud-sniper-engine:
+  cloud-intelligence-engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Run 24/7 Background Sniper Trader & 90% Profit Lock Every 20s
+      - name: Run 24/7 Background Intelligence & Zero-Loss Guardian Every 20s
         env:
-          # ඔබේ Vercel URL එක පහතින් නිවැරදිව තබන්න:
           SITE_URL: "https://newcrypto-dar0tmxdl-theekshana-ff.vercel.app/"
-           FALLBACK_URL: "https://newcrypto-three.vercel.app"
+          FALLBACK_URL: "https://newcrypto-three.vercel.app"
         run: |
           for i in $(seq 1 14); do
             curl -s "${SITE_URL}/api/futures-agent?action=cron_tick" || true
