@@ -1,4 +1,4 @@
-// File: agent.js (Ultra-Safe Recovery + +5.5% Auto Break-Even Shield + +10% Profit Lock)
+// File: agent.js (Displays Full 8-Module Crypto Intelligence + Whale/Insider Tracking + Zero-Loss Shield)
 const $ = id => document.getElementById(id);
 const ls = {
   get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } },
@@ -20,7 +20,7 @@ if ($('menuBtn')) $('menuBtn').onclick = () => tg(true);
 if ($('scrim')) $('scrim').onclick = () => tg(false);
 
 const cfg = ls.get('mexc100Cfg', {
-  sec: '', entryMode: 'sniper_auto', autoMargin: 'auto', margin: 1.5, autoLev: 'auto', lev: 8,
+  sec: '', entryMode: 'sniper_auto', autoMargin: 'auto', margin: 1.5, autoLev: 'auto', lev: 10,
   dailyGoal: 5, lockRetention: 85, maxLossRoe: 25, tpRoe: 30, tf: '15m'
 });
 
@@ -29,7 +29,7 @@ if ($('entryMode')) $('entryMode').value = cfg.entryMode || 'sniper_auto';
 if ($('autoMargin')) $('autoMargin').value = cfg.autoMargin || 'auto';
 if ($('margin')) $('margin').value = cfg.margin != null ? cfg.margin : 1.5;
 if ($('autoLev')) $('autoLev').value = cfg.autoLev || 'auto';
-if ($('lev')) $('lev').value = cfg.lev || 8;
+if ($('lev')) $('lev').value = cfg.lev || 10;
 if ($('dailyGoal')) $('dailyGoal').value = cfg.dailyGoal != null ? cfg.dailyGoal : 5;
 if ($('lockRetention')) $('lockRetention').value = cfg.lockRetention != null ? cfg.lockRetention : 85;
 if ($('maxLossRoe')) $('maxLossRoe').value = Math.max(20, Number(cfg.maxLossRoe || 25));
@@ -56,7 +56,7 @@ function saveCfg() {
     autoMargin: $('autoMargin') ? $('autoMargin').value : 'auto',
     margin: $('margin') ? (+$('margin').value || 1.5) : 1.5,
     autoLev: $('autoLev') ? $('autoLev').value : 'auto',
-    lev: $('lev') ? (+$('lev').value || 8) : 8,
+    lev: $('lev') ? (+$('lev').value || 10) : 10,
     dailyGoal: $('dailyGoal') ? (+$('dailyGoal').value || 5) : 5,
     lockRetention: $('lockRetention') ? (+$('lockRetention').value || 85) : 85,
     maxLossRoe: $('maxLossRoe') ? Math.max(20, +$('maxLossRoe').value || 25) : 25,
@@ -231,15 +231,17 @@ function renderTradeNote(note) {
   $('noteContent').innerHTML = `
     <div style="background:rgba(56,189,248,0.07);border:1px solid ${isUp ? '#2ecc9a' : '#ff5d5d'};border-radius:8px;padding:12px;margin-top:8px;line-height:1.6">
       <div style="font-size:1.1em;margin-bottom:6px">
-        <b>🎯 තෝරාගත් Coin එක: <span style="color:#38bdf8">${note.coin}</span></b>
+        <b>🧠 Crypto Intelligence Pick: <span style="color:#38bdf8">${note.coin}</span></b>
         <span class="tag ${isUp ? 'up' : 'down'}" style="margin-left:8px">${isUp ? '📈 UP (LONG SETUP)' : '📉 DOWN (SHORT SETUP)'}</span>
       </div>
       <p style="margin:6px 0"><b>🎯 හොඳම Sniper Entry කලාපය (Wave ii Pullback):</b> <span style="color:#38bdf8;font-weight:700">${note.sniperZone || ''}</span></p>
       <p style="margin:6px 0"><b>🏁 Multi-Targets &amp; Safe Structural SL:</b> <span style="color:#2ecc9a;font-weight:700">${note.targetsText || ''}</span></p>
       <p style="margin:6px 0"><b>🔮 මිල යන දිශාව (Prediction):</b> ${note.prediction}</p>
+      ${note.whaleAndOnChain ? `<p style="margin:6px 0;color:#a78bfa"><b>${note.whaleAndOnChain}</b></p>` : ''}
+      ${note.futuresAndGlobal ? `<p style="margin:6px 0"><b>${note.futuresAndGlobal}</b></p>` : ''}
       <p style="margin:6px 0"><b>🧐 ඇයි මේ Coin එක තෝරාගත්තේ?:</b> ${note.whySelected}</p>
-      <p style="margin:6px 0"><b>🏆 තහවුරු වූ Trading Methods (25-Method Matrix):</b> <span style="color:#f0b429">${note.methodsUsed}</span></p>
-      <p style="margin:6px 0"><b>🌍 Global Crypto News &amp; Market Sentiment:</b> ${note.newsSummary}</p>
+      <p style="margin:6px 0"><b>🏆 තහවුරු වූ Advanced TA Methods (SMC/ICT/Gann/Elliott/SMI):</b> <span style="color:#f0b429">${note.methodsUsed}</span></p>
+      <p style="margin:6px 0"><b>🌍 News &amp; Social Sentiment:</b> ${note.newsSummary}</p>
       <p style="margin:6px 0;color:#2ecc9a"><b>${note.capitalProtection}</b></p>
     </div>`;
 }
@@ -348,7 +350,7 @@ async function previewChartAnalysisOnly() {
   saveCfg();
 
   if ($('analyzeBtn')) $('analyzeBtn').disabled = true;
-  $('statusMsg').innerHTML = `🔍 <b>Analyzing 100 Coins with BTC Trend Lock &amp; 25 Methods...</b>`;
+  $('statusMsg').innerHTML = `🧠 <b>Running 8-Module Crypto Intelligence (Whale Flow, Futures OI, Global Dominance &amp; 25 TA Methods)...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -370,14 +372,14 @@ async function previewChartAnalysisOnly() {
       await loadChartCoin(pick.coin, pick);
 
       if ($('RADAR')) {
-        $('RADAR').innerHTML = `<h3>📡 100-Coin Recovery Sniper Analysis (Scanned ${d.scannedCount} Coins)</h3>
-          <p style="margin:6px 0">🏆 <b>Best BTC-Aligned Setup: ${pick.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction}</span> · Entry: <b>${pick.entry}</b> · Safe SL: <b class="down">${pick.sl}</b> · Targets: <b class="up">${pick.tp1} → ${pick.tp2} → ${pick.tp3} → ${pick.tp}</b></p>
-          ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Sniper Entry</th><th>Safe SL</th><th>Target (iii)</th><th>Score</th></tr>
-            ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.entry}</td><td class="down">${c.sl}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
+        $('RADAR').innerHTML = `<h3>📡 100-Coin Crypto Intelligence Radar (Scanned ${d.scannedCount} Coins)</h3>
+          <p style="margin:6px 0">🏆 <b>#1 Whale &amp; TA Setup: ${pick.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction}</span> · Entry: <b>${pick.entry}</b> · Safe SL: <b class="down">${pick.sl}</b> · Targets: <b class="up">${pick.tp1} → ${pick.tp2} → ${pick.tp3} → ${pick.tp}</b></p>
+          ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Whale Delta</th><th>Sniper Entry</th><th>Target (iii)</th><th>Score</th></tr>
+            ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.whaleDelta || 1.1}x</td><td>${c.entry}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
           </table>` : ''}`;
       }
 
-      $('statusMsg').innerHTML = `<span class="up">📊 Pre-Trade Chart Drawn for <b>${pick.symbol} (${pick.direction})</b>!</span>`;
+      $('statusMsg').innerHTML = `<span class="up">📊 Crypto Intelligence Chart Drawn for <b>${pick.symbol} (${pick.direction})</b>!</span>`;
     }
   } catch (e) {
     $('statusMsg').innerHTML = `<span class="down">⚠️ Server connection failed: ${e.message}</span>`;
@@ -396,7 +398,7 @@ async function scanAndOpenBestTrade(isAuto = false) {
   isScanning = true;
   lastScanTime = Date.now();
   if (!isAuto && $('runOnceBtn')) $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Scanning 100 Coins with BTC Master Trend Filter &amp; Opening Ultra-Safe Recovery Trade...</b>`;
+  $('statusMsg').innerHTML = `🧠 <b>Scanning 100 Coins with Whale Tracker, Futures Intelligence &amp; Opening Safe Trade...</b>`;
 
   const now = Date.now();
   const activeCooldowns = Object.keys(cooldownMap).filter(sym => cooldownMap[sym] > now);
@@ -411,7 +413,7 @@ async function scanAndOpenBestTrade(isAuto = false) {
         autoMargin: $('autoMargin') ? ($('autoMargin').value === 'auto') : true,
         marginUsdt: $('margin') ? (+$('margin').value || 1.5) : 1.5,
         autoLeverage: $('autoLev') ? ($('autoLev').value === 'auto') : true,
-        leverage: $('lev') ? (+$('lev').value || 8) : 8,
+        leverage: $('lev') ? (+$('lev').value || 10) : 10,
         timeframe: $('tf') ? $('tf').value : '15m',
         cooldownCoins: activeCooldowns
       })
@@ -433,10 +435,10 @@ async function scanAndOpenBestTrade(isAuto = false) {
       });
 
       if ($('RADAR')) {
-        $('RADAR').innerHTML = `<h3>📡 100-Coin Recovery Scanner Result (Scanned ${d.scannedCount} Active Coins)</h3>
-          <p style="margin:6px 0">🏆 <b>Opened #1 Recovery Trade: ${exec.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction} ${exec.leverage}x</span> · <b>${exec.orderTypeLabel}</b> · Margin: <b>$${d.usedMargin} USDT</b></p>
-          ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Sniper Entry</th><th>Safe SL</th><th>Target (iii)</th><th>Score</th></tr>
-            ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.entry}</td><td class="down">${c.sl}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
+        $('RADAR').innerHTML = `<h3>📡 100-Coin Crypto Intelligence Result (Scanned ${d.scannedCount} Active Coins)</h3>
+          <p style="margin:6px 0">🏆 <b>Opened #1 Intelligence Trade: ${exec.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction} ${exec.leverage}x</span> · <b>${exec.orderTypeLabel}</b> · Margin: <b>$${d.usedMargin} USDT</b></p>
+          ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Whale Delta</th><th>Sniper Entry</th><th>Target (iii)</th><th>Score</th></tr>
+            ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.whaleDelta || 1.1}x</td><td>${c.entry}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
           </table>` : ''}`;
       }
 
@@ -499,9 +501,7 @@ async function refreshLiveStatus() {
       peakTracker[p.positionId] = prev;
       ls.set('mexcPeakTracker', peakTracker);
 
-      // STAGE 1: AUTO BREAK-EVEN SHIELD (+5.5% ROE -> Never let it drop below +1.5% ROE!)
       const isBreakEvenActive = prev.peakRoe >= 5.5 && prev.peakRoe < 10.0;
-      // STAGE 2: 85% PROFIT LOCK (+10% ROE -> Lock 85% of Peak Profit!)
       const isProfitLockActive = prev.peakRoe >= 10.0;
       const lockedRoeFloor = isProfitLockActive
         ? +(prev.peakRoe * retentionPct).toFixed(2)
@@ -522,7 +522,7 @@ async function refreshLiveStatus() {
     if (!(d.positions || []).length) {
       if ($('POS')) {
         $('POS').innerHTML = `<h3>⚡ Active Futures Trade (Zero-Loss Break-Even &amp; 85% Profit Lock)</h3>
-          <p class="msg">No open position right now. ${autoPilot ? '🤖 Auto-Pilot is waiting for a >=88% BTC-Aligned Setup...' : ''}</p>`;
+          <p class="msg">No open position right now. ${autoPilot ? '🤖 Auto-Pilot is scanning 100 coins with 8-Module Intelligence...' : ''}</p>`;
       }
 
       if (dailyGoal > 0 && dailyProfit >= dailyGoal) {
@@ -537,7 +537,7 @@ async function refreshLiveStatus() {
         return;
       }
 
-      if (autoPilot && !isScanning && (Date.now() - lastScanTime > 30000)) {
+      if (autoPilot && !isScanning && (Date.now() - lastScanTime > 25000)) {
         scanAndOpenBestTrade(true);
       }
     } else {
