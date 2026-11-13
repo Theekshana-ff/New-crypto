@@ -80,64 +80,145 @@ async function getMexcTickerMap() {
   }
 }
 
-async function enrichTechnicalIndicators(coin, tf) {
+function calcEMAVal(arr, period) {
+  const k = 2 / (period + 1);
+  let e = arr[0];
+  for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
+  return e;
+}
+
+function calcRSIVal(closes, period = 14) {
+  let gains = 0, losses = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gains += diff; else losses -= diff;
+  }
+  const rs = losses === 0 ? 100 : gains / losses;
+  return Math.round(100 - 100 / (1 + rs));
+}
+
+function calcATRVal(highs, lows, closes, period = 14) {
+  let sum = 0;
+  for (let i = closes.length - period; i < closes.length; i++) {
+    const tr = Math.max(
+      highs[i] - lows[i],
+      Math.abs(highs[i] - closes[i - 1]),
+      Math.abs(lows[i] - closes[i - 1])
+    );
+    sum += tr;
+  }
+  return sum / period;
+}
+
+// Multi-Timeframe (MTF) + Anti-Trap Pullback Analysis
+async function analyzeCoinDeep(coin, tf) {
+  const htf = tf === '15m' ? '1h' : tf === '1h' ? '4h' : '1d';
   try {
-    const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=80`);
-    if (!r.ok) return null;
-    const raw = await r.json();
-    const closes = raw.map(x => +x[4]);
-    const highs = raw.map(x => +x[2]);
-    const lows = raw.map(x => +x[3]);
-    const vols = raw.map(x => +x[5]);
-    if (closes.length < 50) return null;
+    const [rLtf, rHtf] = await Promise.all([
+      fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${coin}USDT&interval=${tf}&limit=100`),
+      fetch(`https://data-api.binance.vision/api/v3/klines?symbol=${coin}USDT&interval=${htf}&limit=80`)
+    ]);
+    if (!rLtf.ok || !rHtf.ok) return null;
+    const [rawLtf, rawHtf] = await Promise.all([rLtf.json(), rHtf.json()]);
+    if (rawLtf.length < 55 || rawHtf.length < 55) return null;
 
-    const calcEma = (arr, p) => {
-      const k = 2 / (p + 1);
-      let e = arr[0];
-      for (let i = 1; i < arr.length; i++) e = arr[i] * k + e * (1 - k);
-      return e;
-    };
-    const ema20 = calcEma(closes, 20);
-    const ema50 = calcEma(closes, 50);
+    const closes = rawLtf.map(x => +x[4]);
+    const opens = rawLtf.map(x => +x[1]);
+    const highs = rawLtf.map(x => +x[2]);
+    const lows = rawLtf.map(x => +x[3]);
+    const vols = rawLtf.map(x => +x[5]);
 
-    let gains = 0, losses = 0;
-    for (let i = closes.length - 14; i < closes.length; i++) {
-      const diff = closes[i] - closes[i - 1];
-      if (diff >= 0) gains += diff; else losses -= diff;
-    }
-    const rs = losses === 0 ? 100 : gains / losses;
-    const rsi = Math.round(100 - 100 / (1 + rs));
+    const hCloses = rawHtf.map(x => +x[4]);
+    const hEma20 = calcEMAVal(hCloses, 20);
+    const hEma50 = calcEMAVal(hCloses, 50);
+    const hLast = hCloses[hCloses.length - 1];
+    const htfBull = hEma20 > hEma50 && hLast > hEma50;
+    const htfBear = hEma20 < hEma50 && hLast < hEma50;
+
+    const ema20 = calcEMAVal(closes, 20);
+    const ema50 = calcEMAVal(closes, 50);
+    const rsi = calcRSIVal(closes, 14);
+    const atr = calcATRVal(highs, lows, closes, 14);
+
+    const last = closes[closes.length - 1];
+    const prevClose = closes[closes.length - 2];
+    const lastOpen = opens[opens.length - 1];
+    const bullCandle = last > lastOpen && last > prevClose;
+    const bearCandle = last < lastOpen && last < prevClose;
 
     const avgVol = vols.slice(-21, -1).reduce((a, b) => a + b, 0) / 20 || 1;
     const volRatio = +(vols[vols.length - 1] / avgVol).toFixed(2);
 
-    const swingHigh = Math.max(...highs.slice(-40));
-    const swingLow = Math.min(...lows.slice(-40));
-    const last = closes[closes.length - 1];
-    const fibPos = swingHigh > swingLow ? +((swingHigh - last) / (swingHigh - swingLow)).toFixed(2) : 0.5;
+    const swingHigh = Math.max(...highs.slice(-35));
+    const swingLow = Math.min(...lows.slice(-35));
+    const fibRetraceFromHigh = swingHigh > swingLow ? (swingHigh - last) / (swingHigh - swingLow) : 0.5;
+    const distFromEma20Pct = Math.abs(last - ema20) / ema20;
 
-    let detectedMethod = 'EMA 20/50 Trend + Volume Breakout';
-    if (fibPos >= 0.5 && fibPos <= 0.68) {
-      detectedMethod = 'Fibonacci Golden Zone (0.5 - 0.618 Pullback)';
-    } else if (volRatio >= 1.5 && (last > ema20 && ema20 > ema50 || last < ema20 && ema20 < ema50)) {
-      detectedMethod = 'SMC Order Block + Institutional Volume Spike';
-    } else if (rsi <= 32 || rsi >= 68) {
-      detectedMethod = 'RSI Momentum Exhaustion / Liquidity Sweep';
+    // STRICT ANTI-LOSS RULES:
+    // 1. Both LTF & HTF must align in the same direction
+    // 2. Price must NOT be overextended (>2.5% away from EMA20)
+    // 3. RSI must be in safe continuation zone (LONG: 42-64, SHORT: 36-58) — never buy overbought >68 or sell oversold <32!
+    // 4. Last candle must confirm bounce in trade direction
+    let validDirection = null;
+    let setupScore = 0;
+    let method = '';
+
+    if (htfBull && ema20 > ema50 && last >= ema50 && rsi >= 42 && rsi <= 65 && distFromEma20Pct <= 0.022 && bullCandle) {
+      validDirection = 'LONG';
+      setupScore = 78;
+      if (fibRetraceFromHigh >= 0.35 && fibRetraceFromHigh <= 0.68) {
+        setupScore += 10;
+        method = `MTF (${htf}+${tf}) Fibonacci Pullback + EMA20 Bounce`;
+      } else {
+        method = `MTF (${htf}+${tf}) Bullish Order Block + EMA Alignment`;
+      }
+      if (volRatio >= 1.15) setupScore += 5;
+    } else if (htfBear && ema20 < ema50 && last <= ema50 && rsi >= 35 && rsi <= 58 && distFromEma20Pct <= 0.022 && bearCandle) {
+      validDirection = 'SHORT';
+      setupScore = 78;
+      if (fibRetraceFromHigh >= 0.32 && fibRetraceFromHigh <= 0.65) {
+        setupScore += 10;
+        method = `MTF (${htf}+${tf}) Bearish Supply Pullback + EMA20 Rejection`;
+      } else {
+        method = `MTF (${htf}+${tf}) Bearish Structure + EMA Alignment`;
+      }
+      if (volRatio >= 1.15) setupScore += 5;
     }
 
+    if (!validDirection) return null;
+
+    // ATR-based Dynamic Stop Loss (wide enough to survive normal noise, min 1.4%, max 2.8%)
+    const atrPct = atr / last;
+    const slPct = Math.min(0.028, Math.max(0.014, atrPct * 1.8));
+    const tpPct = slPct * 2.1; // Clean 1:2.1 Risk-Reward
+    const dec = last >= 100 ? 2 : last >= 1 ? 4 : 5;
+
+    const entry = +last.toFixed(dec);
+    const sl = +(validDirection === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
+    const tp = +(validDirection === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
+
     return {
+      coin,
+      direction: validDirection,
+      method,
       rsi,
-      emaTrend: ema20 > ema50 ? 'BULLISH (EMA20 > EMA50)' : 'BEARISH (EMA20 < EMA50)',
+      htfTrend: htfBull ? `${htf} BULLISH` : `${htf} BEARISH`,
+      ltfTrend: ema20 > ema50 ? `${tf} BULLISH` : `${tf} BEARISH`,
       volRatio: `${volRatio}x Avg`,
-      fibRetracement: fibPos,
-      detectedMethod
+      indicators: `HTF: ${htfBull ? 'Bull' : 'Bear'} | RSI: ${rsi} | Vol: ${volRatio}x | ATR SL: ${(slPct * 100).toFixed(2)}%`,
+      entry,
+      sl,
+      tp,
+      rr: '1:2.1',
+      confidence: Math.min(95, setupScore),
+      reason: `Confirmed ${htf} + ${tf} trend alignment with safe pullback entry near EMA20 (RSI ${rsi}, no exhaustion) and ATR-protected Stop Loss.`
     };
   } catch (e) {
     return null;
   }
 }
 
-async function getTop30MarketData(maxContractUsdt, excludeSymbols = [], timeframe = '15m') {
+async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m') {
   const [r, cMap] = await Promise.all([
     fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
     getContractMap()
@@ -145,182 +226,112 @@ async function getTop30MarketData(maxContractUsdt, excludeSymbols = [], timefram
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
 
-  const baseList = all
+  // Filter liquid Top 30 USDT coins, avoiding extreme pump/dump traps (>16% 24h)
+  const candidates = all
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|EUR|^USD|PAXG|WBTC/.test(t.symbol))
     .sort((a, b) => Number(b.quoteVolume) - Number(a.quoteVolume))
-    .slice(0, 38)
+    .slice(0, 35)
     .map(t => {
       const coin = t.symbol.replace('USDT', '');
       const sym = `${coin}_USDT`;
       const price = Number(t.lastPrice);
-      const high = Number(t.highPrice);
-      const low = Number(t.lowPrice);
       const chg = Number(t.priceChangePercent);
-      const posInRange = high > low ? ((price - low) / (high - low)) : 0.5;
       const cInfo = cMap[sym] || { contractSize: 1, maxLeverage: 50 };
-      const minNotional1Contract = price * cInfo.contractSize;
-
-      return {
-        coin,
-        symbol: sym,
-        price,
-        change24h: chg.toFixed(2) + '%',
-        chgNum: chg,
-        high24h: high,
-        low24h: low,
-        posInRange: +posInRange.toFixed(2),
-        minContractUsdt: +minNotional1Contract.toFixed(2),
-        maxLeverage: cInfo.maxLeverage,
-        volumeUSDT: Math.round(Number(t.quoteVolume))
-      };
+      const minContractUsdt = +(price * cInfo.contractSize).toFixed(2);
+      return { coin, symbol: sym, price, chgNum: chg, change24h: chg.toFixed(2) + '%', minContractUsdt };
     })
-    .filter(c => c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol))
-    .slice(0, 30);
+    .filter(c => c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 16)
+    .slice(0, 22);
 
-  const sortedByMom = [...baseList].sort((a, b) => Math.abs(b.chgNum) - Math.abs(a.chgNum)).slice(0, 8);
-  await Promise.all(sortedByMom.map(async c => {
-    const ta = await enrichTechnicalIndicators(c.coin, timeframe);
-    if (ta) Object.assign(c, ta);
-  }));
+  const verified = [];
+  // Run deep MTF + Pullback analysis in parallel batches
+  for (let i = 0; i < candidates.length; i += 6) {
+    const batch = candidates.slice(i, i + 6);
+    const res = await Promise.all(batch.map(c => analyzeCoinDeep(c.coin, timeframe)));
+    res.forEach((setup, idx) => {
+      if (setup) {
+        setup.change24h = batch[idx].change24h;
+        setup.minContractUsdt = batch[idx].minContractUsdt;
+        verified.push(setup);
+      }
+    });
+  }
 
-  return baseList;
+  return verified.sort((a, b) => b.confidence - a.confidence);
 }
 
-function calcAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
+// Conservative Auto-Leverage (caps at 5x - 12x unless tiny contract requires slightly higher)
+function calcSafeAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
   const minLevForContract = Math.ceil((minContractUsdt * 1.08) / Math.max(0.5, marginUsdt));
   const slPct = Math.abs(entry - sl) / (entry || 1);
-  let targetLev = slPct > 0 ? Math.round(0.25 / slPct) : 15;
-
-  if (marginUsdt <= 1.5) targetLev = Math.max(targetLev, 15);
-  else if (marginUsdt <= 3) targetLev = Math.max(targetLev, 12);
-
-  const finalLev = Math.max(minLevForContract, Math.min(maxLev, Math.max(5, targetLev)));
-  return Math.min(50, finalLev);
+  // Risk only ~15% of margin at Stop-Loss so liquidation is very far away
+  const safeLev = slPct > 0 ? Math.round(0.15 / slPct) : 8;
+  const capped = Math.min(12, Math.max(5, safeLev));
+  return Math.min(maxLev, Math.max(minLevForContract, capped));
 }
 
-function rankCandidatesAlgo(marketList) {
-  const scored = marketList.map(c => {
-    const absChg = Math.abs(c.chgNum);
-    const momScore = absChg >= 1.5 && absChg <= 14 ? absChg * 2.2 : absChg * 0.6;
-    const dirBonus = (c.chgNum > 0 && c.posInRange > 0.62) || (c.chgNum < 0 && c.posInRange < 0.38) ? 14 : 0;
-    const taBonus = c.detectedMethod ? 8 : 0;
-    return { ...c, totalScore: momScore + dirBonus + taBonus };
-  }).sort((a, b) => b.totalScore - a.totalScore);
-
-  const buildPick = c => {
-    const isLong = c.chgNum >= 0;
-    const p = c.price;
-    const riskPct = 0.015;
-    const rewardPct = 0.036;
-    const dec = p >= 100 ? 2 : p >= 1 ? 4 : 5;
-    const entry = +p.toFixed(dec);
-    const sl = +(isLong ? p * (1 - riskPct) : p * (1 + riskPct)).toFixed(dec);
-    const tp = +(isLong ? p * (1 + rewardPct) : p * (1 - rewardPct)).toFixed(dec);
-
-    return {
-      coin: c.coin,
-      direction: isLong ? 'LONG' : 'SHORT',
-      method: c.detectedMethod || 'SMC Momentum + EMA 20/50 Alignment',
-      indicators: `RSI: ${c.rsi || 54} | ${c.emaTrend || (isLong ? 'EMA Bullish' : 'EMA Bearish')} | Vol: ${c.volRatio || '1.4x'} | RR: 1:2.4`,
-      entry,
-      sl,
-      tp,
-      rr: '1:2.4',
-      confidence: Math.min(94, Math.round(78 + (c.totalScore || 10) * 0.4)),
-      reason: `${c.coin} selected via ${c.detectedMethod || 'Multi-Factor Momentum'} (${c.change24h} 24h move, ${c.emaTrend || 'strong trend structure'}) targeting a 1:2.4 Risk-to-Reward ratio.`
-    };
-  };
-
-  const best = buildPick(scored[0]);
-  best.topCandidates = scored.slice(0, 3).map(x => ({
+async function confirmWithGemini(verifiedSetups, timeframe) {
+  const topRadar = verifiedSetups.slice(0, 3).map(x => ({
     coin: x.coin,
-    direction: x.chgNum >= 0 ? 'LONG' : 'SHORT',
-    method: x.detectedMethod || 'EMA Trend + Volume',
+    direction: x.direction,
+    method: x.method,
     change24h: x.change24h,
-    confidence: Math.min(94, Math.round(78 + (x.totalScore || 10) * 0.4))
+    confidence: x.confidence
   }));
-  return best;
-}
 
-async function pickBestCoinWithGemini(marketList, timeframe) {
-  const algoFallback = rankCandidatesAlgo(marketList);
+  const best = { ...verifiedSetups[0], topCandidates: topRadar };
   const geminiKey = (process.env.GEMINI_API_KEY || '').trim();
-  if (!geminiKey || !marketList.length) return algoFallback;
+  if (!geminiKey || verifiedSetups.length === 1) return best;
 
-  const prompt = `You are an elite institutional Crypto Futures AI Trading Agent.
-Analyze these live Top USDT coins (${timeframe} timeframe) with their real technical indicators (RSI, EMA Trend, Fib Retracement, Detected Method, 24h Change, Volume):
-${JSON.stringify(marketList.slice(0, 20).map(({ chgNum, maxLeverage, ...rest }) => rest))}
+  const prompt = `You are a strict institutional Risk-First Crypto Futures AI Agent.
+These setups have ALREADY passed Multi-Timeframe (HTF + ${timeframe}) EMA alignment, RSI safe-zone (no overbought/oversold chasing), and ATR Stop-Loss checks:
+${JSON.stringify(verifiedSetups.slice(0, 5))}
 
-Select the SINGLE BEST coin (#1) for a MEXC USDT-M Futures trade (LONG or SHORT), and also list the top 3 radar candidates.
-Specify the exact analysis method used (e.g., "SMC Order Block + Volume Spike", "Fibonacci 0.618 Golden Zone + EMA Trend", "RSI Divergence + Liquidity Sweep", or "EMA 20/50 Breakout").
-Calculate exact Entry, Stop-Loss (SL ~1.5% away), and Take-Profit (TP ~3.6% away, at least 1:2.2 RR) prices.
-
-Respond ONLY with a raw JSON object matching this exact schema:
+Pick the SINGLE SAFEST setup with the highest probability of hitting Take-Profit without hitting Stop-Loss.
+Keep its exact entry, sl, and tp values, or refine them slightly for safety.
+Respond ONLY with raw JSON:
 {
-  "coin": "XRP",
+  "coin": "COIN",
   "direction": "LONG",
-  "method": "SMC Order Block + EMA 20/50 Alignment",
-  "indicators": "RSI: 58 | EMA20 > EMA50 Bullish | Vol: 1.6x Avg | RR: 1:2.4",
+  "method": "Exact method name",
+  "indicators": "Exact indicators string",
   "entry": 0.0,
   "sl": 0.0,
   "tp": 0.0,
-  "rr": "1:2.4",
   "confidence": 88,
-  "reason": "Clear 2-sentence explanation of why this coin was chosen, which analysis method triggered it, and its profit target.",
-  "topCandidates": [
-    {"coin": "XRP", "direction": "LONG", "method": "SMC Order Block", "change24h": "+4.2%", "confidence": 88},
-    {"coin": "SOL", "direction": "LONG", "method": "Fib 0.618 Pullback", "change24h": "+3.1%", "confidence": 82},
-    {"coin": "DOGE", "direction": "SHORT", "method": "EMA Breakdown", "change24h": "-2.8%", "confidence": 79}
-  ]
+  "reason": "2-sentence explanation of why this MTF pullback setup is the safest trade right now."
 }`;
 
-  let models = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-flash-latest', 'gemini-pro-latest'];
   try {
-    const lr = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${geminiKey}`);
-    if (lr.ok) {
-      const lj = await lr.json();
-      const found = (lj.models || [])
-        .filter(m => (m.supportedGenerationMethods || []).includes('generateContent') && /gemini/i.test(m.name) && !/vision|embedding|imagen|aqa|tts|audio/i.test(m.name))
-        .map(m => m.name.replace(/^models\//, ''));
-      if (found.length) {
-        found.sort((a, b) => (/flash/i.test(b) ? 1 : 0) - (/flash/i.test(a) ? 1 : 0));
-        models = found.slice(0, 4);
+    const r = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: { temperature: 0.1 }
+        })
+      }
+    );
+    const j = await r.json();
+    const rawText = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    const match = rawText.replace(/```json|```/gi, '').trim().match(/\{[\s\S]*\}/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      const matchedOrig = verifiedSetups.find(v => v.coin === parsed.coin);
+      if (matchedOrig) {
+        return {
+          ...matchedOrig,
+          reason: parsed.reason || matchedOrig.reason,
+          confidence: parsed.confidence || matchedOrig.confidence,
+          topCandidates: topRadar
+        };
       }
     }
   } catch (e) {}
 
-  for (const model of models) {
-    try {
-      const r = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.2 }
-          })
-        }
-      );
-      const j = await r.json();
-      if (!r.ok || j.error) continue;
-
-      const rawText = j.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      const cleaned = rawText.replace(/```json|```/gi, '').trim();
-      const match = cleaned.match(/\{[\s\S]*\}/);
-      if (!match) continue;
-
-      const parsed = JSON.parse(match[0]);
-      if (parsed.coin && parsed.direction && parsed.entry) {
-        if (!parsed.method) parsed.method = algoFallback.method;
-        if (!parsed.indicators) parsed.indicators = algoFallback.indicators;
-        if (!parsed.topCandidates) parsed.topCandidates = algoFallback.topCandidates;
-        return parsed;
-      }
-    } catch (e) {}
-  }
-
-  return algoFallback;
+  return best;
 }
 
 async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) {
@@ -333,7 +344,7 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
   const minContractUsdt = price * contractSize;
 
   const leverage = autoLeverage
-    ? calcAutoLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), maxLev)
+    ? calcSafeAutoLeverage(marginUsdt, minContractUsdt, price, Number(pick.sl), maxLev)
     : Math.min(maxLev, Math.max(1, reqLeverage));
 
   const notional = marginUsdt * leverage;
@@ -346,8 +357,8 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
     vol,
     leverage,
     side,
-    type: 5, // Market Order
-    openType: 1, // Isolated margin
+    type: 5,
+    openType: 1,
     stopLossPrice: Number(pick.sl),
     takeProfitPrice: Number(pick.tp)
   };
@@ -360,11 +371,10 @@ async function notifyTelegram(pick, exec, marginUsdt) {
   const token = process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
-  const text = `🤖🚀 MEXC AI FUTURES TRADE EXECUTED[span_0](start_span)[span_0](end_span)\n` +
-    `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)[span_1](start_span)[span_1](end_span)\n` +
+  const text = `🤖🛡️ SAFE MTF AI FUTURES TRADE\n` +
+    `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
     `Method: ${pick.method}\n` +
     `Indicators: ${pick.indicators}\n` +
-    `Margin: $${marginUsdt} USDT (Size: $${exec.notional})\n` +
     `Entry: ${pick.entry} | SL: ${pick.sl} | TP: ${pick.tp}\n` +
     `Confidence: ${pick.confidence}%\n` +
     `Reason: ${pick.reason}`;
@@ -442,26 +452,30 @@ module.exports = async (req, res) => {
 
     if (action === 'scan_and_trade') {
       const marginUsdt = Math.max(0.5, Number(body.marginUsdt) || 1);
-      const reqLeverage = Math.min(50, Math.max(1, Number(body.leverage) || 10));
+      const reqLeverage = Math.min(25, Math.max(1, Number(body.leverage) || 8));
       const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
       const maxOpen = Math.max(1, Number(body.maxOpen) || 2);
 
       const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
       if ((openPos || []).length >= maxOpen) {
-        return res.status(400).json({ error: `Max Open Positions limit (${maxOpen}) reached. Close a trade or increase limit.` });
+        return res.status(400).json({ error: `Max Open Positions limit (${maxOpen}) reached. Waiting for current trade to finish.` });
       }
       const excludeSymbols = (openPos || []).map(p => p.symbol);
 
-      const maxLookupLev = autoLeverage ? 40 : reqLeverage;
+      const maxLookupLev = autoLeverage ? 15 : reqLeverage;
       const maxContractUsdt = marginUsdt * maxLookupLev;
 
-      const top30 = await getTop30MarketData(maxContractUsdt, excludeSymbols, timeframe);
-      if (!top30.length) {
-        throw new Error(`No new coins fit $${marginUsdt} USDT margin right now. Enable Auto-Leverage or increase margin.`);
+      const verifiedSetups = await scanHighProbabilitySetups(maxContractUsdt, excludeSymbols, timeframe);
+
+      // STRICT NO-TRADE PROTECTION: Do not force a trade if the market has no clean MTF pullback setup!
+      if (!verifiedSetups.length || verifiedSetups[0].confidence < 80) {
+        return res.status(400).json({
+          error: '⏸️ AI Protection Active: No high-probability MTF pullback setup right now (Market is choppy/overextended). Capital protected — try scanning again in 15 mins.'
+        });
       }
 
-      const pick = await pickBestCoinWithGemini(top30, timeframe);
+      const pick = await confirmWithGemini(verifiedSetups, timeframe);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
       await notifyTelegram(pick, exec, marginUsdt);
 
