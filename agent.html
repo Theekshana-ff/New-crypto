@@ -29,9 +29,8 @@
 </nav>
 
 <main>
-  <!-- MEXC Account & Agent Controls -->
   <section class="card" style="margin-bottom:12px">
-    <h3>⚙️ MEXC Futures AI Agent Control Panel (25-Method 5-Pillar Matrix)</h3>
+    <h3>⚙️ MEXC Futures AI Agent Control Panel (25-Method Matrix)</h3>
     <div class="rin" style="margin-top:8px">
       <label>Agent Password (AGENT_SECRET)
         <input id="sec" type="password" placeholder="Enter secret key">
@@ -51,7 +50,7 @@
       </label>
       <label>Leverage Mode
         <select id="autoLev" style="width:100%;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px">
-          <option value="auto" selected>⚡ Auto-Adjust Safe Leverage (Matches USDT &amp; SL)</option>
+          <option value="auto" selected>⚡ Auto-Adjust Safe Leverage</option>
           <option value="manual">✋ Manual Leverage</option>
         </select>
       </label>
@@ -66,7 +65,7 @@
         </select>
       </label>
       <label>Max Open Positions
-        <input id="maxOpen" type="number" min="1" max="10" value="2">
+        <input id="maxOpen" type="number" min="1" max="10" value="1">
       </label>
       <label>🛡️ Auto-Close Profit Target (ROE %)
         <input id="tpRoe" type="number" min="0" step="5" value="20" placeholder="0 = Off">
@@ -78,48 +77,42 @@
 
     <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px">
       <button id="runOnceBtn" class="moreBtn" style="background:#2ecc9a;color:#0e1621;font-weight:700;margin:0">
-        🚀 Scan Top 30 (All 25 Methods) &amp; Execute AI Trade
+        🚀 Scan Top 30 &amp; Execute AI Trade
       </button>
       <button id="autoToggleBtn" class="moreBtn" style="background:#f0b429;color:#0e1621;font-weight:700;margin:0">
-        🔄 Start 24/7 Auto-Pilot: OFF
+        🔄 Start Auto-Pilot (Continuous Loop): OFF
       </button>
       <button id="refreshBtn" class="moreBtn" style="margin:0">↻ Refresh Live PnL</button>
     </div>
     <p id="statusMsg" class="msg" style="margin-top:8px">Enter your Agent Password and click Refresh or Execute.</p>
   </section>
 
-  <!-- MEXC Futures Balance Summary -->
   <section class="card" id="BAL" style="margin-bottom:12px">
     <h3>💼 MEXC Futures Account</h3>
     <p class="msg">Connect with your Agent Password to view live USDT balance &amp; active trades.</p>
   </section>
 
-  <!-- Live Open Positions & Profit/Loss Tracker -->
   <section class="card" id="POS" style="margin-bottom:12px">
     <h3>📊 Live MEXC Futures Positions (Real-Time Profit / Loss)</h3>
     <p class="msg">No active positions loaded yet.</p>
   </section>
 
-  <!-- Latest AI 25-Method & Technical Breakdown Card -->
   <section class="card" id="AI_BRAIN" style="margin-bottom:12px">
     <h3>🧠 Latest AI 25-Method Confluence Breakdown &amp; Top 3 Radar</h3>
-    <p class="msg">Run a scan to see which of the 25 Institutional Methods across the 5 Pillars triggered the trade.</p>
+    <p class="msg">Run a scan to see the 25-method analysis.</p>
   </section>
 
-  <!-- Live Trend Detection Chart -->
   <section class="card" style="margin-bottom:12px">
     <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:8px">
       <h3 id="chartHeader" style="margin:0">📈 Live AI Trend &amp; Position Chart (BTC/USDT)</h3>
       <div id="trendBadge" class="badge">Detecting Trend...</div>
     </div>
     <div id="agentChart" style="width:100%;height:360px;border-radius:8px;overflow:hidden"></div>
-    <p class="msg" style="margin-top:6px">Blue Line = Fast EMA 20 · Orange Line = Slow EMA 50 · Dashed Lines = Active Entry / SL / TP</p>
   </section>
 
-  <!-- AI Agent Execution History Log -->
   <section class="card" id="LOG">
-    <h3>📜 AI Agent Trade Log (25-Method Executed History)</h3>
-    <div id="logList"><p class="msg">No trades executed by AI Agent in this session yet.</p></div>
+    <h3>📜 AI Agent Trade Log</h3>
+    <div id="logList"><p class="msg">No trades executed yet.</p></div>
   </section>
 </main>
 
