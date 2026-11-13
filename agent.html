@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>AI Futures Trading Agent ($10/Day Engine)</title>
+  <title>AI Futures Trading Agent (10 Pro Upgrades)</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <header class="top">
   <div class="row">
     <button id="menuBtn" aria-label="Menu">&#9776;</button>
-    <b>🤖 AI Futures Trading Agent ($10/Day Profit Engine)</b>
+    <b>🤖 AI Futures Agent (25-Methods + 10 Pro Upgrades)</b>
     <div class="clock"><div id="time"></div><div id="date"></div></div>
   </div>
 </header>
@@ -31,14 +31,14 @@
 <main>
   <!-- Control Panel -->
   <section class="card" style="margin-bottom:12px">
-    <h3>⚙️ MEXC Futures AI Agent Control Panel ($10 USDT Daily Target)</h3>
+    <h3>⚙️ MEXC Futures AI Agent Control Panel ($10/Day + 10 Institutional Upgrades)</h3>
     <div class="rin" style="margin-top:8px">
       <label>Agent Password (AGENT_SECRET)
         <input id="sec" type="password" placeholder="Enter secret key">
       </label>
       <label>🧠 Trading Strategy (25-Method Matrix)
         <select id="stratMode" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #2ecc9a;border-radius:8px;padding:8px;font-weight:700">
-          <option value="ALL25" selected>🏆 All 25 Methods Master Confluence (Min 14/25 + 4/5 Pillars)</option>
+          <option value="ALL25" selected>🏆 All 25 Methods Master Confluence (Recommended)</option>
           <option value="P1_SMC_ICT">Pillar 1: Smart Money &amp; ICT (OB, BOS, FVG, OTE, Sweep)</option>
           <option value="P2_TREND">Pillar 2: Trend Matrix (MTF EMA, SuperTrend, Ichimoku, ADX, PSAR)</option>
           <option value="P3_MOMENTUM">Pillar 3: Oscillators (RSI, MACD, Stoch, CCI, Williams %R)</option>
@@ -48,8 +48,8 @@
       </label>
       <label>💰 Wallet Money Management Mode
         <select id="walletMode" style="width:100%;background:var(--bg);color:var(--text);border:1px solid #f0b429;border-radius:8px;padding:8px;font-weight:700">
-          <option value="grow10" selected>🚀 $10 Account Growth (35% Auto-Margin · $10/Day Goal)</option>
-          <option value="compound1">🌱 $1 Micro-Account Compounding (70% Auto)</option>
+          <option value="grow10" selected>🚀 $10 Account Growth (35% Auto + Win-Streak Booster)</option>
+          <option value="compound1">🌱 $1-$3 Micro-Account Compounding (70% Auto)</option>
           <option value="auto20">⚡ Conservative Auto-Scale (20% of Wallet)</option>
           <option value="fixed">✋ Fixed USDT Margin</option>
         </select>
@@ -82,8 +82,14 @@
       <label>🛡️ Single Trade Take Profit (ROE %)
         <input id="tpRoe" type="number" min="0" step="5" value="30" placeholder="0 = Off">
       </label>
+      <label>💰 Partial TP1 50% Lock (ROE %)
+        <input id="partialTpRoe" type="number" min="0" step="2" value="18" placeholder="0 = Off">
+      </label>
       <label>🔒 Trailing Stop Profit Lock (ROE %)
         <input id="trailRoe" type="number" min="0" step="2" value="14" placeholder="0 = Off">
+      </label>
+      <label>🛡️ Auto Break-Even Shield (ROE %)
+        <input id="beRoe" type="number" min="0" step="1" value="6" placeholder="0 = Off">
       </label>
       <label>🛡️ Single Trade Stop Loss (ROE -%)
         <input id="slRoe" type="number" min="0" step="5" value="25" placeholder="0 = Off">
@@ -111,13 +117,13 @@
 
   <!-- Win-Rate, Daily $10 Goal Progress & Analytics Dashboard -->
   <section class="card" id="STATS" style="margin-bottom:12px">
-    <h3>📊 Daily $10 USDT Profit Target &amp; Win-Rate Dashboard</h3>
+    <h3>📊 Daily $10 USDT Profit Target, Streak &amp; Win-Rate Dashboard</h3>
     <p class="msg">Completed trades will appear here automatically.</p>
   </section>
 
   <!-- Live Open Positions & Profit/Loss Tracker -->
   <section class="card" id="POS" style="margin-bottom:12px">
-    <h3>⚡ Live MEXC Futures Positions (Trailing SL &amp; Guardian Active)</h3>
+    <h3>⚡ Live MEXC Futures Positions (Break-Even, Partial TP1 &amp; Trailing SL Active)</h3>
     <p class="msg">No active positions loaded yet.</p>
   </section>
 
