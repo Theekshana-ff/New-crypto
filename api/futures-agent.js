@@ -116,6 +116,41 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
+// --- UPDATE #3: BTC MARKET REGIME FILTER ---
+async function getBtcMarketRegime(tf = '15m') {
+  try {
+    const r = await fetch(`https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=${tf}&limit=60`);
+    if (!r.ok) return { regime: 'NEUTRAL', allowLong: true, allowShort: true, change1hPct: 0 };
+    const raw = await r.json();
+    const closes = raw.map(x => +x[4]);
+    const ema20 = calcEMAVal(closes, 20);
+    const ema50 = calcEMAVal(closes, 50);
+    const last = closes[closes.length - 1];
+    const prev4 = closes[closes.length - 5] || last;
+    const suddenMovePct = ((last - prev4) / prev4) * 100;
+
+    // Block Altcoin LONG if BTC is crashing (>1.3% sudden drop or bearish below both EMAs)
+    const btcDumping = suddenMovePct <= -1.3 || (last < ema20 && ema20 < ema50 && suddenMovePct < -0.5);
+    // Block Altcoin SHORT if BTC is squeezing upward (>1.3% sudden pump or bullish above both EMAs)
+    const btcPumping = suddenMovePct >= 1.3 || (last > ema20 && ema20 > ema50 && suddenMovePct > 0.5);
+
+    let regime = 'BALANCED';
+    if (btcDumping) regime = 'BTC_DUMPING (Alt LONG Blocked)';
+    else if (btcPumping) regime = 'BTC_PUMPING (Alt SHORT Blocked)';
+    else if (ema20 > ema50) regime = 'BTC_BULLISH';
+    else regime = 'BTC_BEARISH';
+
+    return {
+      regime,
+      allowLong: !btcDumping,
+      allowShort: !btcPumping,
+      suddenMovePct: +suddenMovePct.toFixed(2)
+    };
+  } catch (e) {
+    return { regime: 'NEUTRAL', allowLong: true, allowShort: true, suddenMovePct: 0 };
+  }
+}
+
 // --- 25 INSTITUTIONAL METHODS (5 PILLARS) ---
 function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear) {
   const n = closes.length;
@@ -307,7 +342,7 @@ function evaluate25Methods(closes, opens, highs, lows, vols, ema20, ema50, atr, 
   return { votes, pillars, volRatio };
 }
 
-async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
+async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25', btcRegime = { allowLong: true, allowShort: true, regime: 'BALANCED' }) {
   const htf = tf === '15m' ? '1h' : tf === '1h' ? '4h' : '1d';
   try {
     const [rLtf, rHtf] = await Promise.all([
@@ -339,7 +374,7 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
 
     if (Math.abs(last - ema20) / ema20 > 0.026) return null;
 
-    const { votes, pillars, volRatio } = evaluate25Methods(
+    const { votes, pillars } = evaluate25Methods(
       closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear
     );
 
@@ -347,6 +382,12 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
     if (htfBull && votes.LONG.length > votes.SHORT.length) dir = 'LONG';
     else if (htfBear && votes.SHORT.length > votes.LONG.length) dir = 'SHORT';
     if (!dir) return null;
+
+    // Enforce BTC Market Regime Filter for Altcoins
+    if (coin !== 'BTC') {
+      if (dir === 'LONG' && !btcRegime.allowLong) return null;
+      if (dir === 'SHORT' && !btcRegime.allowShort) return null;
+    }
 
     if (dir === 'LONG' && (rsi < 40 || rsi > 66)) return null;
     if (dir === 'SHORT' && (rsi < 34 || rsi > 60)) return null;
@@ -371,30 +412,31 @@ async function analyzeCoin25Methods(coin, tf, strategyMode = 'ALL25') {
     const sl = +(dir === 'LONG' ? last * (1 - slPct) : last * (1 + slPct)).toFixed(dec);
     const tp = +(dir === 'LONG' ? last * (1 + tpPct) : last * (1 - tpPct)).toFixed(dec);
 
-    const pillarSummary = `P1(SMC/ICT):${pillars.P1_SMC_ICT[dir]}/5 | P2(Trend):${pillars.P2_TREND[dir]}/5 | P3(Mom):${pillars.P3_MOMENTUM[dir]}/5 | P4(Vol):${pillars.P4_VOLUME[dir]}/5 | P5(Pat):${pillars.P5_PATTERNS[dir]}/5`;
+    const pillarSummary = `P1:${pillars.P1_SMC_ICT[dir]}/5 | P2:${pillars.P2_TREND[dir]}/5 | P3:${pillars.P3_MOMENTUM[dir]}/5 | P4:${pillars.P4_VOLUME[dir]}/5 | P5:${pillars.P5_PATTERNS[dir]}/5`;
 
     return {
       coin,
       direction: dir,
-      method: `25-Method Confluence (${methodCount}/25 Passed · ${activePillars}/5 Pillars)`,
+      method: `25-Method Confluence (${methodCount}/25 · ${activePillars}/5 Pillars)`,
       matchedMethods,
-      indicators: `${pillarSummary} | RSI:${rsi} | RR:1:2.2`,
+      indicators: `${pillarSummary} | BTC:${btcRegime.regime} | RSI:${rsi}`,
       entry,
       sl,
       tp,
       rr: '1:2.2',
       confidence,
-      reason: `Passed ${methodCount}/25 institutional methods across ${activePillars}/5 Pillars (${matchedMethods.slice(0, 6).join(', ')}...) with ${htf}+${tf} alignment and ATR-protected Stop Loss.`
+      reason: `Passed ${methodCount}/25 methods across ${activePillars}/5 Pillars with BTC Regime (${btcRegime.regime}) & ${htf}+${tf} alignment.`
     };
   } catch (e) {
     return null;
   }
 }
 
-async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL25') {
-  const [r, cMap] = await Promise.all([
+async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], timeframe = '15m', strategyMode = 'ALL25', useBtcFilter = true) {
+  const [r, cMap, btcRegime] = await Promise.all([
     fetch('https://data-api.binance.vision/api/v3/ticker/24hr'),
-    getContractMap()
+    getContractMap(),
+    useBtcFilter ? getBtcMarketRegime(timeframe) : Promise.resolve({ regime: 'FILTER_OFF', allowLong: true, allowShort: true })
   ]);
   if (!r.ok) throw new Error('Market scanner feed unavailable.');
   const all = await r.json();
@@ -418,7 +460,7 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
   const verified = [];
   for (let i = 0; i < candidates.length; i += 6) {
     const batch = candidates.slice(i, i + 6);
-    const res = await Promise.all(batch.map(c => analyzeCoin25Methods(c.coin, timeframe, strategyMode)));
+    const res = await Promise.all(batch.map(c => analyzeCoin25Methods(c.coin, timeframe, strategyMode, btcRegime)));
     res.forEach((setup, idx) => {
       if (setup) {
         setup.change24h = batch[idx].change24h;
@@ -428,7 +470,7 @@ async function scanHighProbabilitySetups(maxContractUsdt, excludeSymbols = [], t
     });
   }
 
-  return verified.sort((a, b) => b.confidence - a.confidence);
+  return { setups: verified.sort((a, b) => b.confidence - a.confidence), btcRegime };
 }
 
 function calcSafeAutoLeverage(marginUsdt, minContractUsdt, entry, sl, maxLev = 50) {
@@ -453,11 +495,10 @@ async function confirmWithGemini(verifiedSetups, timeframe) {
   if (!geminiKey || verifiedSetups.length === 1) return best;
 
   const prompt = `You are an elite institutional Crypto Futures AI Trading Agent using the 25-Method 5-Pillar Confluence Matrix. Timeframe: ${timeframe}.
-These setups have ALREADY passed at least 14/25 methods and 4/5 institutional pillars:
+These setups passed >=14/25 methods, >=4/5 pillars, and the BTC Market Regime Filter:
 ${JSON.stringify(verifiedSetups.slice(0, 4))}
 
-Pick the SINGLE SAFEST setup with the highest 25-method confluence.
-Respond ONLY with raw JSON:
+Pick the SINGLE SAFEST setup. Respond ONLY with raw JSON:
 {
   "coin": "COIN",
   "direction": "LONG",
@@ -535,17 +576,16 @@ async function openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage) 
   return { orderId, symbol, vol, leverage, contractSize, notional: +(vol * minContractUsdt).toFixed(2) };
 }
 
-async function notifyTelegram(pick, exec, marginUsdt) {
+async function notifyTelegram(pick, exec, marginUsdt, source = 'WEB') {
   const token = process.env.TG_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
   const chat = process.env.TG_CHAT || process.env.TELEGRAM_CHAT_ID;
   if (!token || !chat) return;
-  const text = `🤖🏆 25-METHOD AI FUTURES TRADE EXECUTED\n` +
+  const text = `🤖🏆 25-METHOD AI TRADE (${source})\n` +
     `Coin: ${exec.symbol} (${pick.direction} ${exec.leverage}x)\n` +
     `Confluence: ${pick.method}\n` +
     `Pillars: ${pick.indicators}\n` +
     `Margin: $${marginUsdt} USDT (Size: $${exec.notional})\n` +
     `Entry: ${pick.entry} | SL: ${pick.sl} | TP: ${pick.tp}\n` +
-    `Confidence: ${pick.confidence}%\n` +
     `Reason: ${pick.reason}`;
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -557,20 +597,42 @@ async function notifyTelegram(pick, exec, marginUsdt) {
 module.exports = async (req, res) => {
   try {
     const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) : req.query;
-    const secret = (body.secret || req.headers['x-secret'] || '').trim();
+    const action = body.action || 'status';
 
+    // --- UPDATE #4: SERVER-SIDE 24/7 VERCEL CRON HANDLER ---
+    if (action === 'cron_tick') {
+      const cronAuth = (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+      const cronSecret = (process.env.CRON_SECRET || process.env.AGENT_SECRET || '').trim();
+      if (cronSecret && cronAuth && cronAuth !== cronSecret) {
+        return res.status(401).json({ error: 'Unauthorized Cron Tick' });
+      }
+      const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
+      if ((openPos || []).length >= 1) {
+        return res.status(200).json({ ok: true, status: 'Active position already open, skipping cron entry.' });
+      }
+      const marginUsdt = Math.max(0.5, Number(process.env.CRON_MARGIN_USDT) || 1);
+      const { setups, btcRegime } = await scanHighProbabilitySetups(marginUsdt * 15, [], '15m', 'ALL25', true);
+      if (!setups.length || setups[0].confidence < 80) {
+        return res.status(200).json({ ok: true, status: 'No 25-method setup passed filter right now.', btcRegime });
+      }
+      const pick = await confirmWithGemini(setups, '15m');
+      const exec = await openFuturesPosition(pick, marginUsdt, 10, true);
+      await notifyTelegram(pick, exec, marginUsdt, '24/7 SERVER CRON');
+      return res.status(200).json({ ok: true, executed: exec, pick });
+    }
+
+    const secret = (body.secret || req.headers['x-secret'] || '').trim();
     if (!process.env.AGENT_SECRET || secret !== process.env.AGENT_SECRET.trim()) {
       return res.status(401).json({ error: 'Invalid Agent Password (AGENT_SECRET).' });
     }
 
-    const action = body.action || 'status';
-
     if (action === 'status') {
-      const [positions, assets, tickers, cMap] = await Promise.all([
+      const [positions, assets, tickers, cMap, btcRegime] = await Promise.all([
         mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
         mexcReq('GET', '/api/v1/private/account/assets').catch(() => []),
         getMexcTickerMap(),
-        getContractMap()
+        getContractMap(),
+        getBtcMarketRegime('15m')
       ]);
       const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 0, equity: 0 };
 
@@ -615,6 +677,7 @@ module.exports = async (req, res) => {
         balance: avail.toFixed(2),
         equity: eq.toFixed(2),
         totalPnl: totalUnrealized.toFixed(3),
+        btcRegime,
         positions: formatted
       });
     }
@@ -625,7 +688,8 @@ module.exports = async (req, res) => {
       const autoLeverage = body.autoLeverage !== false;
       const timeframe = body.timeframe || '15m';
       const strategyMode = body.strategyMode || 'ALL25';
-      const maxOpen = Math.max(1, Number(body.maxOpen) || 2);
+      const useBtcFilter = body.useBtcFilter !== false;
+      const maxOpen = Math.max(1, Number(body.maxOpen) || 1);
 
       const openPos = await mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []);
       if ((openPos || []).length >= maxOpen) {
@@ -636,22 +700,25 @@ module.exports = async (req, res) => {
       const maxLookupLev = autoLeverage ? 15 : reqLeverage;
       const maxContractUsdt = marginUsdt * maxLookupLev;
 
-      const verifiedSetups = await scanHighProbabilitySetups(maxContractUsdt, excludeSymbols, timeframe, strategyMode);
+      const { setups, btcRegime } = await scanHighProbabilitySetups(
+        maxContractUsdt, excludeSymbols, timeframe, strategyMode, useBtcFilter
+      );
 
-      if (!verifiedSetups.length || verifiedSetups[0].confidence < 80) {
+      if (!setups.length || setups[0].confidence < 80) {
         return res.status(400).json({
-          error: '⏸️ 25-Method AI Shield Active: No coin currently passes >=14/25 methods & 4/5 Pillars safely. Capital protected — try scanning again in 15 mins.'
+          error: `⏸️ 25-Method Shield (${btcRegime.regime}): No coin safely passes >=14/25 methods & 4/5 Pillars right now. Waiting for next cycle.`
         });
       }
 
-      const pick = await confirmWithGemini(verifiedSetups, timeframe);
+      const pick = await confirmWithGemini(setups, timeframe);
       const exec = await openFuturesPosition(pick, marginUsdt, reqLeverage, autoLeverage);
-      await notifyTelegram(pick, exec, marginUsdt);
+      await notifyTelegram(pick, exec, marginUsdt, 'AUTO-AGENT');
 
       return res.status(200).json({
         ok: true,
         pick,
         exec,
+        btcRegime,
         timestamp: Date.now()
       });
     }
