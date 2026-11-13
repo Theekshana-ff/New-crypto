@@ -16,15 +16,18 @@ const tg = o => { if ($('drawer')) $('drawer').classList.toggle('open', o); if (
 if ($('menuBtn')) $('menuBtn').onclick = () => tg(1);
 if ($('scrim')) $('scrim').onclick = () => tg(0);
 
-const savedCfg = ls.get('mexcAgentCfg', { sec: '', margin: 1, autoLev: 'auto', lev: 15, tf: '15m', maxOpen: 2, tpRoe: 25, slRoe: 15 });
+const savedCfg = ls.get('mexcAgentCfg', {
+  sec: '', stratMode: 'ALL', margin: 1, autoLev: 'auto', lev: 10, tf: '15m', maxOpen: 2, tpRoe: 20, slRoe: 25
+});
 $('sec').value = savedCfg.sec || '';
+if ($('stratMode')) $('stratMode').value = savedCfg.stratMode || 'ALL';
 $('margin').value = savedCfg.margin != null ? savedCfg.margin : 1;
 $('autoLev').value = savedCfg.autoLev || 'auto';
-$('lev').value = savedCfg.lev || 15;
+$('lev').value = savedCfg.lev || 10;
 $('tf').value = savedCfg.tf || '15m';
 $('maxOpen').value = savedCfg.maxOpen || 2;
-$('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 25;
-$('slRoe').value = savedCfg.slRoe != null ? savedCfg.slRoe : 15;
+$('tpRoe').value = savedCfg.tpRoe != null ? savedCfg.tpRoe : 20;
+$('slRoe').value = savedCfg.slRoe != null ? savedCfg.slRoe : 25;
 
 function toggleLevInput() {
   $('lev').disabled = $('autoLev').value === 'auto';
@@ -36,17 +39,21 @@ const saveCfg = () => {
   toggleLevInput();
   ls.set('mexcAgentCfg', {
     sec: $('sec').value.trim(),
+    stratMode: $('stratMode') ? $('stratMode').value : 'ALL',
     margin: +$('margin').value || 1,
     autoLev: $('autoLev').value,
-    lev: +$('lev').value || 15,
+    lev: +$('lev').value || 10,
     tf: $('tf').value,
     maxOpen: +$('maxOpen').value || 2,
     tpRoe: +$('tpRoe').value || 0,
     slRoe: +$('slRoe').value || 0
   });
 };
-['sec', 'margin', 'autoLev', 'lev', 'tf', 'maxOpen', 'tpRoe', 'slRoe'].forEach(id => $(id).onchange = saveCfg);
+['sec', 'stratMode', 'margin', 'autoLev', 'lev', 'tf', 'maxOpen', 'tpRoe', 'slRoe'].forEach(id => {
+  if ($(id)) $(id).onchange = saveCfg;
+});
 
+// --- LIVE TREND CHART ---
 let chart, candleSeries, ema20Series, ema50Series, priceLines = [];
 let currentChartCoin = 'BTC', currentLevels = null;
 
@@ -112,7 +119,7 @@ async function loadChartCoin(coin, levels = null) {
     } else if (isBear) {
       $('trendBadge').innerHTML = `<span class="tag down">🔥 LIVE TREND: STRONG BEARISH (DOWNTREND)</span>`;
     } else {
-      $('trendBadge').innerHTML = `<span class="tag">⚖️ LIVE TREND: CONSOLIDATING / RANGING</span>`;
+      $('trendBadge').innerHTML = `<span class="tag">⚖️ LIVE TREND: CONSOLIDATING / PULLBACK ZONE</span>`;
     }
 
     priceLines.forEach(l => candleSeries.removePriceLine(l));
@@ -146,21 +153,21 @@ function renderAiBrain() {
   const radar = latest.topCandidates || [];
 
   $('AI_BRAIN').innerHTML = `
-    <h3>🧠 Latest AI Deep Analysis, Method &amp; Top 3 Radar</h3>
+    <h3>🧠 Latest AI 6-Method Deep Analysis &amp; Top 3 Radar</h3>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px;margin-top:8px">
       <div style="background:rgba(56,189,248,0.08);border:1px solid #38bdf8;border-radius:8px;padding:10px">
         <b>🎯 Selected Trade: ${latest.coin}_USDT <span class="tag ${latest.direction === 'LONG' ? 'up' : 'down'}">${latest.direction} (${latest.leverage}x)</span></b>
-        <p style="margin:6px 0"><b>📐 Analysis Method Used:</b> <span style="color:#f0b429;font-weight:700">${latest.method || 'Multi-Factor AI Momentum'}</span></p>
-        <p style="margin:6px 0"><b>📊 Technical Indicators:</b> <small>${latest.indicators || 'EMA 20/50 + RSI + Volume'}</small></p>
+        <p style="margin:6px 0"><b>📐 Winning Method(s):</b> <span style="color:#f0b429;font-weight:700">${latest.method || '6-Method Confluence'}</span></p>
+        <p style="margin:6px 0"><b>📊 Confluence Indicators:</b> <small>${latest.indicators || 'MTF EMA + RSI + ATR'}</small></p>
         <p style="margin:6px 0"><small>${latest.reason}</small></p>
       </div>
       <div style="background:rgba(255,255,255,0.03);border:1px solid var(--line);border-radius:8px;padding:10px">
-        <b>🏆 Top 3 Coins Ranked from Top 30 Scan:</b>
-        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Method</th><th>Conf</th></tr>` +
+        <b>🏆 Top 3 Coins Ranked from 6-Method Scan:</b>
+        ${radar.length ? `<table style="margin-top:6px"><tr><th>Rank</th><th>Coin</th><th>Method</th><th>Score</th></tr>` +
           radar.map((c, idx) => `<tr>
             <td>#${idx + 1}</td>
             <td><b>${c.coin}</b> <span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td>
-            <td><small>${c.method || 'Momentum'}</small></td>
+            <td><small>${c.method || 'Confluence'}</small></td>
             <td><b>${c.confidence}%</b></td>
           </tr>`).join('') + `</table>` : '<p class="msg">Radar data available on next scan.</p>'}
       </div>
@@ -174,13 +181,13 @@ function renderLogs() {
     return;
   }
   renderAiBrain();
-  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>Method &amp; Indicators</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
+  $('logList').innerHTML = '<table><tr><th>Time</th><th>Coin &amp; Lev</th><th>6-Method Confluence</th><th>Entry / SL / TP</th><th>AI Reasoning</th></tr>' +
     logs.map(l => `<tr>
       <td><small>${new Date(l.time).toLocaleString()}</small></td>
       <td><b>${l.coin}_USDT</b><br><span class="tag ${l.direction === 'LONG' ? 'up' : 'down'}">${l.direction} (${l.leverage}x)</span><br><small>Margin: $${l.margin}</small></td>
-      <td><b style="color:#f0b429">${l.method || 'AI Momentum'}</b><br><small class="msg">${l.indicators || ''}</small></td>
+      <td><b style="color:#f0b429">${l.method || '6-Method Confluence'}</b><br><small class="msg">${l.indicators || ''}</small></td>
       <td>Entry: <b>${l.entry}</b><br><span class="down">SL: ${l.sl}</span><br><span class="up">TP: ${l.tp}</span></td>
-      <td><small>${l.reason} (Conf: ${l.confidence}%)</small></td>
+      <td><small>${l.reason} (Score: ${l.confidence}%)</small></td>
     </tr>`).join('') + '</table>';
 }
 
@@ -231,7 +238,7 @@ async function refreshStatus() {
       if (tpTarget > 0 && roeNum >= tpTarget) {
         await closePositionApi(p, `Take-Profit Target +${tpTarget}%`);
       } else if (slLimit > 0 && roeNum <= -Math.abs(slLimit)) {
-        await closePositionApi(p, `Stop-Loss Guardian -${ Math.abs(slLimit)}%`);
+        await closePositionApi(p, `Stop-Loss Guardian -${Math.abs(slLimit)}%`);
       }
     }
 
@@ -308,9 +315,10 @@ async function runAgentTrade() {
 
   const marginVal = Math.max(0.5, +$('margin').value || 1);
   const isAutoLev = $('autoLev').value === 'auto';
+  const stratMode = $('stratMode') ? $('stratMode').value : 'ALL';
 
   $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins with SMC / Fib / EMA / RSI &amp; Consulting Gemini AI...</b>`;
+  $('statusMsg').innerHTML = `🤖 <b>Scanning Top 30 Coins across ${stratMode === 'ALL' ? 'All 6 Institutional Methods' : stratMode} &amp; Consulting Gemini AI...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -319,9 +327,10 @@ async function runAgentTrade() {
       body: JSON.stringify({
         action: 'scan_and_trade',
         secret,
+        strategyMode: stratMode,
         marginUsdt: marginVal,
         autoLeverage: isAutoLev,
-        leverage: +$('lev').value || 15,
+        leverage: +$('lev').value || 10,
         timeframe: $('tf').value,
         maxOpen: +$('maxOpen').value || 2
       })
@@ -330,7 +339,7 @@ async function runAgentTrade() {
     if (!r.ok || d.error) {
       $('statusMsg').innerHTML = `<span class="down">❌ ${d.error}</span>`;
     } else {
-      const usedLev = d.exec.leverage || +$('lev').value || 15;
+      const usedLev = d.exec.leverage || +$('lev').value || 10;
       const logs = ls.get('mexcAgentLogs', []);
       logs.unshift({
         time: Date.now(),
@@ -376,6 +385,6 @@ $('autoToggleBtn').onclick = () => {
 
 initChart();
 renderLogs();
-loadChartCoin('UNI');
+loadChartCoin('BTC');
 refreshStatus();
 setInterval(refreshStatus, 5000);
