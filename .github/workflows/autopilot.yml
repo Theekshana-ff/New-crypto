@@ -8,13 +8,16 @@ jobs:
   cloud-intelligence-engine:
     runs-on: ubuntu-latest
     steps:
-      - name: Run 24/7 Background Intelligence & Zero-Loss Guardian Every 20s
+      - name: Run 24/7 Instant Chain-Trader & Twin-Engine Shield Every 20s
         env:
-          SITE_URL: "https://newcrypto-dar0tmxdl-theekshana-ff.vercel.app/"
+          SHARE_TOKEN: "x4teqDD9B9jvCZS6MMVZSRaKtZUz3fHB"
+          PREVIEW_URL: "https://newcrypto-3bbhq4pmj-theekshana-ff.vercel.app"
+          PRIMARY_URL: "https://kshana-ff.vercel.app"
           FALLBACK_URL: "https://newcrypto-three.vercel.app"
         run: |
           for i in $(seq 1 14); do
-            curl -s "${SITE_URL}/api/futures-agent?action=cron_tick" || true
+            curl -s "${PREVIEW_URL}/api/futures-agent?_vercel_share=${SHARE_TOKEN}&action=cron_tick" || true
+            curl -s "${PRIMARY_URL}/api/futures-agent?action=cron_tick" || true
             curl -s "${FALLBACK_URL}/api/futures-agent?action=cron_tick" || true
             sleep 20
           done
