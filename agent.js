@@ -1,4 +1,4 @@
-// File: agent.js (5-Stage Big-Profit Runner Ladder + Power Compounding + Zero-Loss Shield)
+// File: agent.js ($1.00 USDT Dollar-Target Shield + Liquidation Magnet Display + 8-Module Intelligence)
 const $ = id => document.getElementById(id);
 const ls = {
   get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } },
@@ -20,20 +20,19 @@ if ($('menuBtn')) $('menuBtn').onclick = () => tg(true);
 if ($('scrim')) $('scrim').onclick = () => tg(false);
 
 const cfg = ls.get('mexc100Cfg', {
-  sec: '', entryMode: 'sniper_auto', autoMargin: 'auto', margin: 1.5, autoLev: 'auto', lev: 16,
-  dailyGoal: 5, lockRetention: 85, maxLossRoe: 25, tpRoe: 80, tf: '15m'
+  sec: '', beTriggerUsdt: 1.0, autoMargin: 'auto', margin: 1.5, autoLev: 'auto', lev: 18,
+  dailyGoal: 5, lockRetention: 85, tpRoe: 100, tf: '15m'
 });
 
 if ($('sec')) $('sec').value = cfg.sec || '';
-if ($('entryMode')) $('entryMode').value = cfg.entryMode || 'sniper_auto';
+if ($('beTriggerUsdt')) $('beTriggerUsdt').value = cfg.beTriggerUsdt != null ? cfg.beTriggerUsdt : 1.0;
 if ($('autoMargin')) $('autoMargin').value = cfg.autoMargin || 'auto';
 if ($('margin')) $('margin').value = cfg.margin != null ? cfg.margin : 1.5;
 if ($('autoLev')) $('autoLev').value = cfg.autoLev || 'auto';
-if ($('lev')) $('lev').value = cfg.lev || 16;
+if ($('lev')) $('lev').value = cfg.lev || 18;
 if ($('dailyGoal')) $('dailyGoal').value = cfg.dailyGoal != null ? cfg.dailyGoal : 5;
 if ($('lockRetention')) $('lockRetention').value = cfg.lockRetention != null ? cfg.lockRetention : 85;
-if ($('maxLossRoe')) $('maxLossRoe').value = Math.max(20, Number(cfg.maxLossRoe || 25));
-if ($('tpRoe')) $('tpRoe').value = Math.max(60, Number(cfg.tpRoe || 80));
+if ($('tpRoe')) $('tpRoe').value = Math.max(60, Number(cfg.tpRoe || 100));
 if ($('tf')) $('tf').value = cfg.tf || '15m';
 
 function updateInputStates() {
@@ -52,25 +51,24 @@ function saveCfg() {
   updateInputStates();
   ls.set('mexc100Cfg', {
     sec: $('sec') ? $('sec').value.trim() : '',
-    entryMode: $('entryMode') ? $('entryMode').value : 'sniper_auto',
+    beTriggerUsdt: $('beTriggerUsdt') ? (+$('beTriggerUsdt').value || 1.0) : 1.0,
     autoMargin: $('autoMargin') ? $('autoMargin').value : 'auto',
     margin: $('margin') ? (+$('margin').value || 1.5) : 1.5,
     autoLev: $('autoLev') ? $('autoLev').value : 'auto',
-    lev: $('lev') ? (+$('lev').value || 16) : 16,
+    lev: $('lev') ? (+$('lev').value || 18) : 18,
     dailyGoal: $('dailyGoal') ? (+$('dailyGoal').value || 5) : 5,
     lockRetention: $('lockRetention') ? (+$('lockRetention').value || 85) : 85,
-    maxLossRoe: $('maxLossRoe') ? Math.max(20, +$('maxLossRoe').value || 25) : 25,
-    tpRoe: $('tpRoe') ? (+$('tpRoe').value || 80) : 80,
+    tpRoe: $('tpRoe') ? (+$('tpRoe').value || 100) : 100,
     tf: $('tf') ? $('tf').value : '15m'
   });
 }
 
-['sec', 'entryMode', 'autoMargin', 'margin', 'autoLev', 'lev', 'dailyGoal', 'lockRetention', 'maxLossRoe', 'tpRoe', 'tf'].forEach(id => {
+['sec', 'beTriggerUsdt', 'autoMargin', 'margin', 'autoLev', 'lev', 'dailyGoal', 'lockRetention', 'tpRoe', 'tf'].forEach(id => {
   if ($(id)) $(id).onchange = saveCfg;
 });
 
 let chart = null, candleSeries = null, emaSeries = null, waveLineSeries = null, priceLines = [];
-let currentChartCoin = 'BTC';
+let currentChartCoin = 'AERO';
 let currentSetup = ls.get('mexcLastSetup', null);
 
 function initChart() {
@@ -157,13 +155,13 @@ function renderLevelCalloutPills(setup) {
     ${setup.tp2 ? `<span style="background:rgba(46,204,154,0.16);border:2px solid #2ecc9a;color:#6ee7b7;padding:4px 10px;border-radius:6px;font-weight:700">✅ TP 2: ${setup.tp2}</span>` : ''}
     ${setup.tp3 ? `<span style="background:rgba(46,204,154,0.16);border:2px solid #2ecc9a;color:#6ee7b7;padding:4px 10px;border-radius:6px;font-weight:700">✅ TP 3: ${setup.tp3}</span>` : ''}
     ${setup.tp ? `<span style="background:rgba(16,185,129,0.28);border:2px solid #10b981;color:#a7f3d0;padding:4px 10px;border-radius:6px;font-weight:700">🏆 Target (iii): ${setup.tp}</span>` : ''}
-    <span class="tag ${isLong ? 'up' : 'down'}" style="margin-left:auto">${isLong ? '📈 WAVE iii LONG' : '📉 WAVE iii SHORT'}</span>
+    ${setup.liqPoolTarget ? `<span style="background:rgba(240,180,41,0.2);border:2px solid #f0b429;color:#fde047;padding:4px 10px;border-radius:6px;font-weight:700">🔥 Liq Pool: ${setup.liqPoolTarget}</span>` : ''}
   `;
 }
 
 async function loadChartCoin(coin, setup = null) {
   if (!initChart()) return;
-  currentChartCoin = (coin || currentChartCoin || 'BTC').replace(/_?USDT$/, '');
+  currentChartCoin = (coin || currentChartCoin || 'AERO').replace(/_?USDT$/, '');
   if (setup) {
     currentSetup = setup;
     ls.set('mexcLastSetup', setup);
@@ -341,14 +339,35 @@ async function closePositionNow(p, reasonLabel) {
   closingIds.delete(p.positionId);
 }
 
-// 5-STAGE DYNAMIC PROFIT RUNNER LADDER (Lets winners run to +50%..+120% ROE!)
-function getDynamicRunnerFloor(peakRoe) {
-  if (peakRoe >= 80) return { floor: +(peakRoe * 0.90).toFixed(1), label: `🚀 Stage 5 Runner (90% Locked @ +${(peakRoe * 0.90).toFixed(1)}%)` };
-  if (peakRoe >= 50) return { floor: +(peakRoe * 0.82).toFixed(1), label: `🔥 Stage 4 Runner (82% Locked @ +${(peakRoe * 0.82).toFixed(1)}%)` };
-  if (peakRoe >= 30) return { floor: +(peakRoe * 0.75).toFixed(1), label: `⚡ Stage 3 Runner (75% Locked @ +${(peakRoe * 0.75).toFixed(1)}%)` };
-  if (peakRoe >= 15) return { floor: +(peakRoe * 0.65).toFixed(1), label: `📈 Stage 2 Runner (65% Locked @ +${(peakRoe * 0.65).toFixed(1)}%)` };
-  if (peakRoe >= 7.0) return { floor: 2.0, label: `🛡️ Stage 1 Zero-Loss BE (+2.0%)` };
-  return { floor: null, label: `BE activates @ +7% ROE` };
+// DOLLAR-BASED ZERO-LOSS & PROFIT LOCK EVALUATOR (Waits for $1.00 USDT or +45% ROE!)
+function getDollarShieldStatus(peakPnl, peakRoe, triggerUsdt, retentionPct) {
+  if (peakPnl >= triggerUsdt) {
+    const lockedUsdt = +(peakPnl * retentionPct).toFixed(3);
+    return {
+      active: true,
+      type: 'DOLLAR',
+      floorUsdt: lockedUsdt,
+      floorRoe: null,
+      label: `💵 Locked @ +$${lockedUsdt} USDT (${Math.round(retentionPct * 100)}%)`
+    };
+  }
+  if (peakRoe >= 45.0) {
+    const lockedRoe = +(peakRoe * retentionPct).toFixed(1);
+    return {
+      active: true,
+      type: 'ROE',
+      floorUsdt: null,
+      floorRoe: lockedRoe,
+      label: `🚀 Locked @ +${lockedRoe}% ROE`
+    };
+  }
+  return {
+    active: false,
+    type: 'WAITING',
+    floorUsdt: null,
+    floorRoe: null,
+    label: `Activates @ +$${triggerUsdt.toFixed(2)} USDT (or +45% ROE)`
+  };
 }
 
 async function previewChartAnalysisOnly() {
@@ -360,7 +379,7 @@ async function previewChartAnalysisOnly() {
   saveCfg();
 
   if ($('analyzeBtn')) $('analyzeBtn').disabled = true;
-  $('statusMsg').innerHTML = `🧠 <b>Running 8-Module Crypto Intelligence (Whale Flow, Futures OI, Global Dominance &amp; 25 TA Methods)...</b>`;
+  $('statusMsg').innerHTML = `🧠 <b>Running 8-Module Crypto Intelligence (Whale Flow, Liquidation Pools &amp; 25 TA Methods)...</b>`;
 
   try {
     const r = await fetch('/api/futures-agent', {
@@ -383,7 +402,7 @@ async function previewChartAnalysisOnly() {
 
       if ($('RADAR')) {
         $('RADAR').innerHTML = `<h3>📡 100-Coin Crypto Intelligence Radar (Scanned ${d.scannedCount} Coins)</h3>
-          <p style="margin:6px 0">🏆 <b>#1 Whale &amp; TA Setup: ${pick.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction}</span> · Entry: <b>${pick.entry}</b> · Safe SL: <b class="down">${pick.sl}</b> · Targets: <b class="up">${pick.tp1} → ${pick.tp2} → ${pick.tp3} → ${pick.tp}</b></p>
+          <p style="margin:6px 0">🏆 <b>#1 Whale &amp; Liquidation Setup: ${pick.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction}</span> · Entry: <b>${pick.entry}</b> · Safe SL: <b class="down">${pick.sl}</b> · Targets: <b class="up">${pick.tp1} → ${pick.tp2} → ${pick.tp3} → ${pick.tp}</b></p>
           ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Whale Delta</th><th>Sniper Entry</th><th>Target (iii)</th><th>Score</th></tr>
             ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.whaleDelta || 1.1}x</td><td>${c.entry}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
           </table>` : ''}`;
@@ -408,7 +427,7 @@ async function scanAndOpenBestTrade(isAuto = false) {
   isScanning = true;
   lastScanTime = Date.now();
   if (!isAuto && $('runOnceBtn')) $('runOnceBtn').disabled = true;
-  $('statusMsg').innerHTML = `🚀 <b>Scanning 100 Coins with Whale Tracker &amp; Opening High-Profit Runner Trade...</b>`;
+  $('statusMsg').innerHTML = `🚀 <b>Scanning 100 Coins with Whale &amp; Liquidation Hunter to Open $1.00+ USDT Runner Trade...</b>`;
 
   const now = Date.now();
   const activeCooldowns = Object.keys(cooldownMap).filter(sym => cooldownMap[sym] > now);
@@ -423,7 +442,7 @@ async function scanAndOpenBestTrade(isAuto = false) {
         autoMargin: $('autoMargin') ? ($('autoMargin').value === 'auto') : true,
         marginUsdt: $('margin') ? (+$('margin').value || 1.5) : 1.5,
         autoLeverage: $('autoLev') ? ($('autoLev').value === 'auto') : true,
-        leverage: $('lev') ? (+$('lev').value || 16) : 16,
+        leverage: $('lev') ? (+$('lev').value || 18) : 18,
         timeframe: $('tf') ? $('tf').value : '15m',
         cooldownCoins: activeCooldowns
       })
@@ -446,13 +465,13 @@ async function scanAndOpenBestTrade(isAuto = false) {
 
       if ($('RADAR')) {
         $('RADAR').innerHTML = `<h3>📡 100-Coin Crypto Intelligence Result (Scanned ${d.scannedCount} Active Coins)</h3>
-          <p style="margin:6px 0">🏆 <b>Opened #1 Big-Profit Runner: ${exec.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction} ${exec.leverage}x</span> · <b>${exec.orderTypeLabel}</b> · Margin: <b>$${d.usedMargin} USDT</b></p>
+          <p style="margin:6px 0">🏆 <b>Opened #1 Dollar Runner: ${exec.symbol}</b> <span class="tag ${pick.direction === 'LONG' ? 'up' : 'down'}">${pick.direction} ${exec.leverage}x</span> · <b>${exec.orderTypeLabel}</b> · Margin: <b>$${d.usedMargin} USDT</b></p>
           ${radar.length ? `<table style="margin-top:8px"><tr><th>Rank</th><th>Coin</th><th>Side</th><th>Whale Delta</th><th>Sniper Entry</th><th>Target (iii)</th><th>Score</th></tr>
             ${radar.map((c, i) => `<tr><td>#${i + 1}</td><td><b>${c.coin}_USDT</b></td><td><span class="tag ${c.direction === 'LONG' ? 'up' : 'down'}">${c.direction}</span></td><td>${c.whaleDelta || 1.1}x</td><td>${c.entry}</td><td class="up">${c.tp}</td><td><b>${c.confidence}%</b></td></tr>`).join('')}
           </table>` : ''}`;
       }
 
-      $('statusMsg').innerHTML = `<span class="up">✅ <b>${exec.orderTypeLabel}</b> on ${exec.symbol} ($${d.usedMargin} @ ${exec.leverage}x)! 5-Stage Big-Profit Runner Active.</span>`;
+      $('statusMsg').innerHTML = `<span class="up">✅ <b>${exec.orderTypeLabel}</b> on ${exec.symbol} ($${d.usedMargin} @ ${exec.leverage}x)! Waiting for +$${($('beTriggerUsdt') ? +$('beTriggerUsdt').value : 1.0).toFixed(2)} USDT to lock profit!</span>`;
       await refreshLiveStatus();
     }
   } catch (e) {
@@ -490,7 +509,7 @@ async function refreshLiveStatus() {
     const openIds = new Set((d.positions || []).map(p => String(p.positionId)));
     Object.keys(activeSnapshot).forEach(oldId => {
       if (!openIds.has(String(oldId))) {
-        recordClosedTrade(activeSnapshot[oldId], 'Exchange / Profit Runner Closed');
+        recordClosedTrade(activeSnapshot[oldId], 'Exchange / $1+ Profit Runner Closed');
         delete peakTracker[oldId];
       }
     });
@@ -499,7 +518,9 @@ async function refreshLiveStatus() {
     activeSnapshot = nextSnap;
     ls.set('mexcActiveSnap', activeSnapshot);
 
-    const maxTpRoe = $('tpRoe') ? (+$('tpRoe').value || 80) : 80;
+    const triggerUsdt = $('beTriggerUsdt') ? (+$('beTriggerUsdt').value || 1.0) : 1.0;
+    const retentionPct = ($('lockRetention') ? (+$('lockRetention').value || 85) : 85) / 100;
+    const maxTpRoe = $('tpRoe') ? (+$('tpRoe').value || 100) : 100;
 
     for (const p of (d.positions || [])) {
       const livePnl = Number(p.pnl);
@@ -511,22 +532,27 @@ async function refreshLiveStatus() {
       peakTracker[p.positionId] = prev;
       ls.set('mexcPeakTracker', peakTracker);
 
-      const ladder = getDynamicRunnerFloor(prev.peakRoe);
+      const shield = getDollarShieldStatus(prev.peakPnl, prev.peakRoe, triggerUsdt, retentionPct);
 
       if (liveRoe >= maxTpRoe) {
-        await closePositionNow(p, `Big Runner Target Hit (+${liveRoe}% ROE)`);
-      } else if (ladder.floor !== null && liveRoe <= ladder.floor) {
+        await closePositionNow(p, `Full Runner Target Hit (+$${livePnl.toFixed(3)} USDT / +${liveRoe}% ROE)`);
+      } else if (shield.active && shield.type === 'DOLLAR' && livePnl <= shield.floorUsdt) {
         await closePositionNow(
           p,
-          `${ladder.label} Triggered (Peak +${prev.peakRoe.toFixed(1)}% -> Secured +${liveRoe.toFixed(1)}% into Wallet)`
+          `💵 $${triggerUsdt.toFixed(2)} Dollar Profit Lock Triggered (Peak +$${prev.peakPnl.toFixed(3)} -> Secured +$${livePnl.toFixed(3)} USDT into Wallet)`
+        );
+      } else if (shield.active && shield.type === 'ROE' && liveRoe <= shield.floorRoe) {
+        await closePositionNow(
+          p,
+          `🚀 High-ROE Profit Lock Triggered (Peak +${prev.peakRoe.toFixed(1)}% -> Secured +${liveRoe.toFixed(1)}% into Wallet)`
         );
       }
     }
 
     if (!(d.positions || []).length) {
       if ($('POS')) {
-        $('POS').innerHTML = `<h3>⚡ Active Futures Trade (5-Stage Big-Profit Runner &amp; Zero-Loss Shield)</h3>
-          <p class="msg">No open position right now. ${autoPilot ? '🤖 Auto-Pilot is scanning 100 coins for the next Wave iii Runner...' : ''}</p>`;
+        $('POS').innerHTML = `<h3>⚡ Active Futures Trade ($${triggerUsdt.toFixed(2)} USDT Trigger Shield &amp; 85% Dollar Profit Lock)</h3>
+          <p class="msg">No open position right now. ${autoPilot ? '🤖 Auto-Pilot is scanning 100 coins for the next Wave iii Dollar Runner...' : ''}</p>`;
       }
 
       if (dailyGoal > 0 && dailyProfit >= dailyGoal) {
@@ -546,19 +572,19 @@ async function refreshLiveStatus() {
       }
     } else {
       if ($('POS')) {
-        $('POS').innerHTML = `<h3>⚡ Active Futures Trade (5-Stage Big-Profit Runner: +7% BE → +15% → +30% → +50% → +100% ROE)</h3>
+        $('POS').innerHTML = `<h3>⚡ Active Futures Trade (Zero-Loss Shield Activates @ +$${triggerUsdt.toFixed(2)} USDT Profit)</h3>
           <table>
-            <tr><th>Coin / Side</th><th>Entry → Live</th><th>Margin</th><th>Peak Profit</th><th>5-Stage Profit Runner Shield</th><th>Live Profit / Loss</th><th>Action</th></tr>
+            <tr><th>Coin / Side</th><th>Entry → Live</th><th>Margin</th><th>Peak Profit (USDT)</th><th>$${triggerUsdt.toFixed(2)} Dollar Shield Status</th><th>Live Profit / Loss</th><th>Action</th></tr>
             ${d.positions.map(p => {
               const pk = peakTracker[p.positionId] || { peakPnl: 0, peakRoe: 0 };
               const isWin = Number(p.pnl) >= 0;
-              const ladder = getDynamicRunnerFloor(pk.peakRoe);
+              const shield = getDollarShieldStatus(pk.peakPnl, pk.peakRoe, triggerUsdt, retentionPct);
               return `<tr>
                 <td><b>${p.symbol}</b><br><span class="tag ${p.direction === 'LONG' ? 'up' : 'down'}">${p.direction} ${p.leverage}x</span></td>
                 <td>${p.entryPrice}<br>→ <b>${p.markPrice}</b></td>
                 <td>$${p.margin}</td>
                 <td class="up"><b>+$${pk.peakPnl.toFixed(4)}</b><br><small>(+${pk.peakRoe.toFixed(2)}%)</small></td>
-                <td><span class="tag ${ladder.floor !== null ? 'up' : ''}">${ladder.label}</span></td>
+                <td><span class="tag ${shield.active ? 'up' : ''}">${shield.label}</span></td>
                 <td class="${isWin ? 'up' : 'down'}" style="font-size:1.1em"><b>${isWin ? '+' : ''}$${p.pnl} USDT</b><br><small>(${isWin ? '+' : ''}${p.roe}%)</small></td>
                 <td><button class="moreBtn manualCloseBtn" data-id="${p.positionId}" style="margin:0;padding:5px 10px;background:#ff5d5d;color:#fff">Close Now</button></td>
               </tr>`;
