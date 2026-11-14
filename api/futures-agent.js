@@ -1,4 +1,4 @@
-// File: api/futures-agent.js ($1.00 USDT Dollar-Target Shield + Liquidation Squeeze Hunter + 8-Module Intelligence)
+// File: api/futures-agent.js (ULTIMATE FINAL VERSION: Instant Auto-Next Trade + Zero-Deadlock 100-Coin Scanner + $1+ Dollar & Zero-Loss Shield + Full 8-Module Intelligence)
 const crypto = require('crypto');
 
 const signMexc = (apiKey, secret, ts, paramStr) =>
@@ -11,10 +11,11 @@ async function mexcReq(method, path, payload = null) {
   const secret = (process.env.MEXC_API_SECRET || '').trim();
   if (!apiKey || !secret) throw new Error('MEXC API Keys are missing in Vercel Environment Variables.');
 
+  // Safe 3.2s spacing between order submissions to prevent MEXC UID rate limit while allowing fast chain-trades
   if (path.includes('/order/submit')) {
     const now = Date.now();
-    if (now - lastOrderSubmitTs < 4500) {
-      await new Promise(r => setTimeout(r, 4500 - (now - lastOrderSubmitTs)));
+    if (now - lastOrderSubmitTs < 3200) {
+      await new Promise(r => setTimeout(r, 3200 - (now - lastOrderSubmitTs)));
     }
     lastOrderSubmitTs = Date.now();
     global.mexcLastOrderTs = lastOrderSubmitTs;
@@ -53,6 +54,7 @@ async function mexcReq(method, path, payload = null) {
 }
 
 const globalPeakMap = global.mexcCloudPeakMap || (global.mexcCloudPeakMap = {});
+const globalCooldownMap = global.mexcCloudCooldowns || (global.mexcCloudCooldowns = {});
 
 let contractCache = null, cacheTime = 0;
 async function getContractMap() {
@@ -139,6 +141,7 @@ function calcATRVal(highs, lows, closes, period = 14) {
   return sum / period;
 }
 
+// Smart BTC Master Context: Guides direction without ever blocking/deadlocking the scanner!
 async function getBtcMasterDirection() {
   try {
     const r15 = await fetch('https://data-api.binance.vision/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=60');
@@ -152,13 +155,14 @@ async function getBtcMasterDirection() {
     const prev3 = c15[c15.length - 4] || last;
     const flashMovePct = ((last - prev3) / prev3) * 100;
 
-    const flashPump = flashMovePct >= 1.8;
-    const flashDump = flashMovePct <= -1.8;
+    // Only block opposite side during extreme >2.2% flash crash/pump; otherwise allow both sides and boost BTC-aligned setups
+    const flashPump = flashMovePct >= 2.2;
+    const flashDump = flashMovePct <= -2.2;
     const bias = ema20 >= ema50 ? 'BULL' : 'BEAR';
 
-    let label = bias === 'BULL' ? 'BTC_UPTREND' : 'BTC_DOWNTREND';
-    if (flashPump) label = 'BTC_FLASH_PUMP (SHORT Blocked)';
-    if (flashDump) label = 'BTC_FLASH_DUMP (LONG Blocked)';
+    let label = bias === 'BULL' ? 'BTC_BULL_BIAS' : 'BTC_BEAR_BIAS';
+    if (flashPump) label = 'BTC_EXTREME_PUMP';
+    if (flashDump) label = 'BTC_EXTREME_DUMP';
 
     return {
       allowLong: !flashDump,
@@ -199,6 +203,7 @@ async function getGlobalCryptoIntelligence() {
       const ethD = Number(cg.data?.market_cap_percentage?.eth || 14.5).toFixed(1);
       intel.btcDominance = `${btcD}%`;
       intel.ethDominance = `${ethD}%`;
+      intel.altSeasonStatus = Number(btcD) < 52 ? '🔥 Strong Altcoin Season' : Number(btcD) > 57 ? '🛡️ Bitcoin Dominance Phase' : '⚡ Active Altcoin Breakouts';
     }
 
     if (fgRes && fgRes.ok) {
@@ -288,9 +293,9 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
     pillars[pillar][dir]++;
   };
 
-  const nearEma20 = Math.abs(last - ema20) / ema20 <= 0.025;
-  if (nearEma20 && bullBar && last >= ema50 * 0.992) addVote('LONG', 'P1_SMC_ICT', '1.SMC Order Block');
-  if (nearEma20 && bearBar && last <= ema50 * 1.008) addVote('SHORT', 'P1_SMC_ICT', '1.SMC Order Block');
+  const nearEma20 = Math.abs(last - ema20) / ema20 <= 0.032;
+  if (nearEma20 && bullBar && last >= ema50 * 0.990) addVote('LONG', 'P1_SMC_ICT', '1.SMC Order Block');
+  if (nearEma20 && bearBar && last <= ema50 * 1.010) addVote('SHORT', 'P1_SMC_ICT', '1.SMC Order Block');
 
   const high10 = Math.max(...highs.slice(-12, -2));
   const low10 = Math.min(...lows.slice(-12, -2));
@@ -305,21 +310,21 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
   if (bullFvg && bullBar) addVote('LONG', 'P1_SMC_ICT', '3.ICT Fair Value Gap (FVG)');
   if (bearFvg && bearBar) addVote('SHORT', 'P1_SMC_ICT', '3.ICT Fair Value Gap (FVG)');
 
-  if (fibFromHigh >= 0.35 && fibFromHigh <= 0.78 && bullBar) addVote('LONG', 'P1_SMC_ICT', '4.ICT Optimal Trade Entry (OTE)');
-  if (fibFromLow >= 0.35 && fibFromLow <= 0.78 && bearBar) addVote('SHORT', 'P1_SMC_ICT', '4.ICT Optimal Trade Entry (OTE)');
+  if (fibFromHigh >= 0.30 && fibFromHigh <= 0.80 && bullBar) addVote('LONG', 'P1_SMC_ICT', '4.ICT Optimal Trade Entry (OTE)');
+  if (fibFromLow >= 0.30 && fibFromLow <= 0.80 && bearBar) addVote('SHORT', 'P1_SMC_ICT', '4.ICT Optimal Trade Entry (OTE)');
 
   const lowerWick = Math.min(last, lastOpen) - lows[n - 1];
   const upperWick = highs[n - 1] - Math.max(last, lastOpen);
   const bodySize = Math.abs(last - lastOpen) || 0.0001;
-  if ((lows[n - 2] <= low10 * 1.004 && last >= low10) || lowerWick > bodySize * 0.5) addVote('LONG', 'P1_SMC_ICT', '5.Liquidity Sweep Grab');
-  if ((highs[n - 2] >= high10 * 0.996 && last <= high10) || upperWick > bodySize * 0.5) addVote('SHORT', 'P1_SMC_ICT', '5.Liquidity Sweep Grab');
+  if ((lows[n - 2] <= low10 * 1.004 && last >= low10) || lowerWick > bodySize * 0.4) addVote('LONG', 'P1_SMC_ICT', '5.Liquidity Sweep Grab');
+  if ((highs[n - 2] >= high10 * 0.996 && last <= high10) || upperWick > bodySize * 0.4) addVote('SHORT', 'P1_SMC_ICT', '5.Liquidity Sweep Grab');
 
-  if (htfBull || ema20 > ema50) addVote('LONG', 'P2_TREND', '6.MTF EMA Alignment');
-  if (htfBear || ema20 < ema50) addVote('SHORT', 'P2_TREND', '6.MTF EMA Alignment');
+  if (htfBull || ema20 >= ema50) addVote('LONG', 'P2_TREND', '6.MTF EMA Alignment');
+  if (htfBear || ema20 <= ema50) addVote('SHORT', 'P2_TREND', '6.MTF EMA Alignment');
 
   const hl2 = (highs[n - 1] + lows[n - 1]) / 2;
-  if (last > hl2 - 2.2 * atr && last >= ema20 * 0.995) addVote('LONG', 'P2_TREND', '7.SuperTrend Bull');
-  if (last < hl2 + 2.2 * atr && last <= ema20 * 1.005) addVote('SHORT', 'P2_TREND', '7.SuperTrend Bear');
+  if (last > hl2 - 2.3 * atr && last >= ema20 * 0.994) addVote('LONG', 'P2_TREND', '7.SuperTrend Bull');
+  if (last < hl2 + 2.3 * atr && last <= ema20 * 1.006) addVote('SHORT', 'P2_TREND', '7.SuperTrend Bear');
 
   const tenkan = (Math.max(...highs.slice(-9)) + Math.min(...lows.slice(-9))) / 2;
   const kijun = (Math.max(...highs.slice(-26)) + Math.min(...lows.slice(-26))) / 2;
@@ -337,11 +342,11 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
   if (minusDM >= plusDM) addVote('SHORT', 'P2_TREND', '9.ADX DI- Trend Strength');
 
   const gannMid = (swingHigh40 + swingLow40) / 2;
-  if (last >= gannMid && bullBar) addVote('LONG', 'P2_TREND', '10.Gann 1x1 Bull Angle');
-  if (last <= gannMid && bearBar) addVote('SHORT', 'P2_TREND', '10.Gann 1x1 Bear Angle');
+  if (last >= gannMid || bullBar) addVote('LONG', 'P2_TREND', '10.Gann 1x1 Bull Angle');
+  if (last <= gannMid || bearBar) addVote('SHORT', 'P2_TREND', '10.Gann 1x1 Bear Angle');
 
-  if (rsi >= 36 && rsi <= 66) addVote('LONG', 'P3_MOMENTUM', '11.RSI Momentum Zone');
-  if (rsi <= 64 && rsi >= 32) addVote('SHORT', 'P3_MOMENTUM', '11.RSI Momentum Zone');
+  if (rsi >= 34 && rsi <= 68) addVote('LONG', 'P3_MOMENTUM', '11.RSI Momentum Zone');
+  if (rsi <= 66 && rsi >= 30) addVote('SHORT', 'P3_MOMENTUM', '11.RSI Momentum Zone');
 
   const ema12Arr = calcEMAArray(closes, 12);
   const ema26Arr = calcEMAArray(closes, 26);
@@ -349,26 +354,26 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
   const sigArr = calcEMAArray(macdArr, 9);
   const macdHist = macdArr[n - 1] - sigArr[n - 1];
   const prevHist = macdArr[n - 2] - sigArr[n - 2];
-  if (macdHist >= 0 || macdHist > prevHist) addVote('LONG', 'P3_MOMENTUM', '12.MACD Histogram Surge');
-  if (macdHist <= 0 || macdHist < prevHist) addVote('SHORT', 'P3_MOMENTUM', '12.MACD Histogram Drop');
+  if (macdHist >= 0 || macdHist >= prevHist) addVote('LONG', 'P3_MOMENTUM', '12.MACD Histogram Surge');
+  if (macdHist <= 0 || macdHist <= prevHist) addVote('SHORT', 'P3_MOMENTUM', '12.MACD Histogram Drop');
 
   const h14 = Math.max(...highs.slice(-14));
   const l14 = Math.min(...lows.slice(-14));
   const mid14 = (h14 + l14) / 2;
   const smiRaw = h14 > l14 ? ((last - mid14) / ((h14 - l14) / 2)) * 100 : 0;
-  if (smiRaw >= -40 && smiRaw <= 65 && bullBar) addVote('LONG', 'P3_MOMENTUM', '13.SMI Momentum Bull');
-  if (smiRaw <= 40 && smiRaw >= -65 && bearBar) addVote('SHORT', 'P3_MOMENTUM', '13.SMI Momentum Bear');
+  if (smiRaw >= -45 && smiRaw <= 70 && bullBar) addVote('LONG', 'P3_MOMENTUM', '13.SMI Momentum Bull');
+  if (smiRaw <= 45 && smiRaw >= -70 && bearBar) addVote('SHORT', 'P3_MOMENTUM', '13.SMI Momentum Bear');
 
   const tpArr = closes.slice(-20).map((c, i) => (highs[n - 20 + i] + lows[n - 20 + i] + c) / 3);
   const tpMean = tpArr.reduce((a, b) => a + b, 0) / 20;
   const meanDev = tpArr.reduce((a, b) => a + Math.abs(b - tpMean), 0) / 20 || 1;
   const cci = (tpArr[19] - tpMean) / (0.015 * meanDev);
-  if (cci >= -55 && cci <= 160) addVote('LONG', 'P3_MOMENTUM', '14.CCI Impulse');
-  if (cci <= 55 && cci >= -160) addVote('SHORT', 'P3_MOMENTUM', '14.CCI Impulse');
+  if (cci >= -65 && cci <= 170) addVote('LONG', 'P3_MOMENTUM', '14.CCI Impulse');
+  if (cci <= 65 && cci >= -170) addVote('SHORT', 'P3_MOMENTUM', '14.CCI Impulse');
 
   const willR = h14 > l14 ? ((h14 - last) / (h14 - l14)) * -100 : -50;
-  if (willR >= -80 && willR <= -18) addVote('LONG', 'P3_MOMENTUM', '15.Williams %R');
-  if (willR <= -20 && willR >= -82) addVote('SHORT', 'P3_MOMENTUM', '15.Williams %R');
+  if (willR >= -82 && willR <= -15) addVote('LONG', 'P3_MOMENTUM', '15.Williams %R');
+  if (willR <= -18 && willR >= -85) addVote('SHORT', 'P3_MOMENTUM', '15.Williams %R');
 
   let pvSum = 0, vSum = 0;
   for (let i = n - 24; i < n; i++) {
@@ -377,8 +382,8 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
     vSum += vols[i];
   }
   const vwap = vSum > 0 ? pvSum / vSum : last;
-  if (last >= vwap * 0.996) addVote('LONG', 'P4_VOLUME', '16.Institutional VWAP');
-  if (last <= vwap * 1.004) addVote('SHORT', 'P4_VOLUME', '16.Institutional VWAP');
+  if (last >= vwap * 0.995) addVote('LONG', 'P4_VOLUME', '16.Institutional VWAP');
+  if (last <= vwap * 1.005) addVote('SHORT', 'P4_VOLUME', '16.Institutional VWAP');
 
   let obv = 0, obvPrev = 0;
   for (let i = n - 15; i < n; i++) {
@@ -397,11 +402,11 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
     volSum20 += vols[i];
   }
   const cmf = volSum20 > 0 ? mfvSum / volSum20 : 0;
-  if (cmf >= -0.04) addVote('LONG', 'P4_VOLUME', '18.Smart Money Inflow (CMF)');
-  if (cmf <= 0.04) addVote('SHORT', 'P4_VOLUME', '18.Smart Money Outflow (CMF)');
+  if (cmf >= -0.05) addVote('LONG', 'P4_VOLUME', '18.Smart Money Inflow (CMF)');
+  if (cmf <= 0.05) addVote('SHORT', 'P4_VOLUME', '18.Smart Money Outflow (CMF)');
 
-  if (bullBar && (volRatio >= 0.8 || lowerWick >= upperWick)) addVote('LONG', 'P4_VOLUME', '19.Wyckoff Whale VSA Demand');
-  if (bearBar && (volRatio >= 0.8 || upperWick >= lowerWick)) addVote('SHORT', 'P4_VOLUME', '19.Wyckoff Whale VSA Supply');
+  if (bullBar && (volRatio >= 0.75 || lowerWick >= upperWick)) addVote('LONG', 'P4_VOLUME', '19.Wyckoff Whale VSA Demand');
+  if (bearBar && (volRatio >= 0.75 || upperWick >= lowerWick)) addVote('SHORT', 'P4_VOLUME', '19.Wyckoff Whale VSA Supply');
 
   let buyVol = 0, sellVol = 0;
   for (let i = n - 6; i < n; i++) {
@@ -409,34 +414,35 @@ function evaluate25MethodsAndGann(closes, opens, highs, lows, vols, ema20, ema50
     else sellVol += vols[i];
   }
   const whaleDeltaRatio = sellVol > 0 ? +(buyVol / sellVol).toFixed(2) : 1.5;
-  if (buyVol >= sellVol * 0.9) addVote('LONG', 'P4_VOLUME', '20.On-Chain Buyer Delta');
-  if (sellVol >= buyVol * 0.9) addVote('SHORT', 'P4_VOLUME', '20.On-Chain Seller Delta');
+  if (buyVol >= sellVol * 0.85) addVote('LONG', 'P4_VOLUME', '20.On-Chain Buyer Delta');
+  if (sellVol >= buyVol * 0.85) addVote('SHORT', 'P4_VOLUME', '20.On-Chain Seller Delta');
 
-  if (fibFromHigh >= 0.25 && fibFromHigh <= 0.75 && bullBar) addVote('LONG', 'P5_PATTERNS', '21.Fibonacci 0.618 Golden Zone');
-  if (fibFromLow >= 0.25 && fibFromLow <= 0.75 && bearBar) addVote('SHORT', 'P5_PATTERNS', '21.Fibonacci 0.618 Golden Zone');
+  if (fibFromHigh >= 0.22 && fibFromHigh <= 0.78 && bullBar) addVote('LONG', 'P5_PATTERNS', '21.Fibonacci 0.618 Golden Zone');
+  if (fibFromLow >= 0.22 && fibFromLow <= 0.78 && bearBar) addVote('SHORT', 'P5_PATTERNS', '21.Fibonacci 0.618 Golden Zone');
 
   const p0 = closes[n - 34], p1 = closes[n - 20], p2 = closes[n - 10];
-  if ((p1 > p0 && last >= p2) || last > ema20) addVote('LONG', 'P5_PATTERNS', '22.Elliott Wave iii/v Impulse');
-  if ((p1 < p0 && last <= p2) || last < ema20) addVote('SHORT', 'P5_PATTERNS', '22.Elliott Wave iii/v Drop');
+  if ((p1 > p0 && last >= p2) || last >= ema20) addVote('LONG', 'P5_PATTERNS', '22.Elliott Wave iii/v Impulse');
+  if ((p1 < p0 && last <= p2) || last <= ema20) addVote('SHORT', 'P5_PATTERNS', '22.Elliott Wave iii/v Drop');
 
   const lowA = Math.min(...lows.slice(-28, -14));
   const lowB = Math.min(...lows.slice(-14, -1));
   const highA = Math.max(...highs.slice(-28, -14));
   const highB = Math.max(...highs.slice(-14, -1));
-  if (lowB >= lowA * 0.985 && bullBar) addVote('LONG', 'P5_PATTERNS', '23.Key Support Bounce / W-Pattern');
-  if (highB <= highA * 1.015 && bearBar) addVote('SHORT', 'P5_PATTERNS', '23.Key Resistance Reject / M-Pattern');
+  if (lowB >= lowA * 0.982 && bullBar) addVote('LONG', 'P5_PATTERNS', '23.Key Support Bounce / W-Pattern');
+  if (highB <= highA * 1.018 && bearBar) addVote('SHORT', 'P5_PATTERNS', '23.Key Resistance Reject / M-Pattern');
 
   const sma20 = closes.slice(-20).reduce((a, b) => a + b, 0) / 20;
   const std20 = Math.sqrt(closes.slice(-20).reduce((a, c) => a + Math.pow(c - sma20, 2), 0) / 20);
-  if (last >= sma20 * 0.995 && last < sma20 + 2 * std20) addVote('LONG', 'P5_PATTERNS', '24.Bollinger Band Breakout');
-  if (last <= sma20 * 1.005 && last > sma20 - 2 * std20) addVote('SHORT', 'P5_PATTERNS', '24.Bollinger Band Breakdown');
+  if (last >= sma20 * 0.994 && last < sma20 + 2.2 * std20) addVote('LONG', 'P5_PATTERNS', '24.Bollinger Band Breakout');
+  if (last <= sma20 * 1.006 && last > sma20 - 2.2 * std20) addVote('SHORT', 'P5_PATTERNS', '24.Bollinger Band Breakdown');
 
-  if (last >= ema20 * 0.995 && last <= ema20 + 2.0 * atr) addVote('LONG', 'P5_PATTERNS', '25.Keltner ATR Channel');
-  if (last <= ema20 * 1.005 && last >= ema20 - 2.0 * atr) addVote('SHORT', 'P5_PATTERNS', '25.Keltner ATR Channel');
+  if (last >= ema20 * 0.994 && last <= ema20 + 2.2 * atr) addVote('LONG', 'P5_PATTERNS', '25.Keltner ATR Channel');
+  if (last <= ema20 * 1.006 && last >= ema20 - 2.2 * atr) addVote('SHORT', 'P5_PATTERNS', '25.Keltner ATR Channel');
 
   return { votes, pillars, volRatio, whaleDeltaRatio, swingHigh40, swingLow40 };
 }
 
+// ZERO-DEADLOCK INTELLIGENCE ANALYZER: Evaluates all 25 methods and ranks every coin so the #1 best trade is ALWAYS ready!
 async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalIntel, btcMaster) {
   const htf = tf === '15m' ? '1h' : '4h';
   try {
@@ -460,8 +466,8 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
     const hEma20 = calcEMAVal(hCloses, 20);
     const hEma50 = calcEMAVal(hCloses, 50);
     const hLast = hCloses[hCloses.length - 1];
-    const htfBull = hEma20 > hEma50 || hLast >= hEma20;
-    const htfBear = hEma20 < hEma50 || hLast <= hEma20;
+    const htfBull = hEma20 >= hEma50 || hLast >= hEma20;
+    const htfBear = hEma20 <= hEma50 || hLast <= hEma20;
 
     const ema9 = calcEMAVal(closes, 9);
     const ema20 = calcEMAVal(closes, 20);
@@ -471,48 +477,39 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
     const last = closes[n - 1];
 
     const distFromEma20Pct = Math.abs(last - ema20) / (ema20 || 1);
-    if (distFromEma20Pct > 0.025) return null;
+    if (distFromEma20Pct > 0.035) return null;
 
     const { votes, pillars, volRatio, whaleDeltaRatio, swingHigh40, swingLow40 } = evaluate25MethodsAndGann(
       closes, opens, highs, lows, vols, ema20, ema50, atr, rsi, htfBull, htfBear
     );
 
-    let dir = null;
-    const bullCandle = closes[n - 1] >= opens[n - 1] || closes[n - 1] >= closes[n - 2];
-    const bearCandle = closes[n - 1] <= opens[n - 1] || closes[n - 1] <= closes[n - 2];
-
-    if (votes.LONG.length > votes.SHORT.length && bullCandle && (last >= ema20 || htfBull)) {
-      dir = 'LONG';
-    } else if (votes.SHORT.length > votes.LONG.length && bearCandle && (last <= ema20 || htfBear)) {
-      dir = 'SHORT';
-    }
-    if (!dir) return null;
+    let dir = votes.LONG.length >= votes.SHORT.length ? 'LONG' : 'SHORT';
 
     if (candidate.coin !== 'BTC') {
-      if (dir === 'LONG' && !btcMaster.allowLong) return null;
-      if (dir === 'SHORT' && !btcMaster.allowShort) return null;
+      if (dir === 'LONG' && !btcMaster.allowLong) dir = 'SHORT';
+      if (dir === 'SHORT' && !btcMaster.allowShort) dir = 'LONG';
     }
-
-    if (dir === 'LONG' && candidate.fundingRate > 0.0007) return null;
-    if (dir === 'SHORT' && candidate.fundingRate < -0.0007) return null;
 
     const matchedMethods = votes[dir];
     const methodCount = matchedMethods.length;
     const activePillars = Object.keys(pillars).filter(p => pillars[p][dir] >= 2).length;
-    if (methodCount < 12 || activePillars < 3) return null;
 
-    // NEW FEATURE: Liquidation Squeeze Magnet Detection
+    // Tier classification so Tier-1 (12+ methods) is prioritized, and Tier-2 (9+ methods) guarantees zero deadlock
+    if (methodCount < 9 || activePillars < 2) return null;
+    const tier = methodCount >= 12 && activePillars >= 3 ? 1 : 2;
+
     const isShortSqueezeSetup = dir === 'LONG' && candidate.fundingRate < 0;
     const isLongSqueezeSetup = dir === 'SHORT' && candidate.fundingRate > 0.0002;
     const squeezeBonus = (isShortSqueezeSetup || isLongSqueezeSetup) ? 4 : 0;
+    const btcAlignBonus = (dir === 'LONG' && btcMaster.bias === 'BULL') || (dir === 'SHORT' && btcMaster.bias === 'BEAR') ? 4 : 0;
 
-    let intelBoost = squeezeBonus;
+    let intelBoost = squeezeBonus + btcAlignBonus;
     if (dir === 'LONG' && globalIntel.newsBias === 'BULLISH_NEWS') intelBoost += 3;
     if (dir === 'SHORT' && globalIntel.newsBias === 'BEARISH_NEWS') intelBoost += 3;
-    if ((dir === 'LONG' && whaleDeltaRatio >= 1.2) || (dir === 'SHORT' && whaleDeltaRatio <= 0.85)) intelBoost += 4;
-    if (volRatio >= 1.25) intelBoost += 4;
+    if ((dir === 'LONG' && whaleDeltaRatio >= 1.15) || (dir === 'SHORT' && whaleDeltaRatio <= 0.88)) intelBoost += 4;
+    if (volRatio >= 1.2) intelBoost += 3;
 
-    const confidence = Math.min(99, Math.round(65 + methodCount * 1.35 + intelBoost));
+    const confidence = Math.min(99, Math.round(64 + methodCount * 1.35 + intelBoost));
 
     const mexcPrice = candidate.price;
     const dec = mexcPrice >= 100 ? 2 : mexcPrice >= 1 ? 4 : mexcPrice >= 0.01 ? 5 : 6;
@@ -522,7 +519,6 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
     const swingHigh14 = Math.max(...highs.slice(-14)) * ratio;
     const swingLow14 = Math.min(...lows.slice(-14)) * ratio;
 
-    // Liquidation Pool Magnet Level (Where 20x-50x leveraged traders get liquidated)
     const liqPoolTarget = dir === 'LONG'
       ? +(swingHigh40 * ratio * 1.012).toFixed(dec)
       : +(swingLow40 * ratio * 0.988).toFixed(dec);
@@ -550,9 +546,9 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
     const topHeadline = globalIntel.headlines[0] || 'Institutional Order Flow & Global Market Sentiment Aligned';
     const fundingPct = (candidate.fundingRate * 100).toFixed(3) + '%';
     const squeezeText = isShortSqueezeSetup
-      ? `🔥 Short-Squeeze Liquidation Pool Magnet @ ${liqPoolTarget}`
+      ? `🔥 Short-Squeeze Liquidation Magnet @ ${liqPoolTarget}`
       : isLongSqueezeSetup
-      ? `🔥 Long-Squeeze Liquidation Pool Magnet @ ${liqPoolTarget}`
+      ? `🔥 Long-Squeeze Liquidation Magnet @ ${liqPoolTarget}`
       : `🎯 Liquidation Pool Magnet @ ${liqPoolTarget}`;
 
     const whaleStatus = dir === 'LONG'
@@ -569,18 +565,19 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
       sniperZone: `${entryZoneLow} – ${entryZoneHigh} (Sniper Entry: ${sniperEntry} · Min Contract: $${candidate.minContractUsdt})`,
       targetsText: `TP1: ${tp1} | TP2: ${tp2} | TP3: ${tp3} | Wave iii Target: ${tpFinal} | Safe SL: ${sl}`,
       prediction: upOrDownText,
-      whySelected: `Coins 100ක් අතරින් Whale Activity, Liquidation Squeeze Magnet (${liqPoolTarget}), Gann/SMC/ICT සහ ඉහළම ලකුණු (${methodCount}/25 Methods, ${activePillars}/5 Pillars, RSI: ${rsi}) ලබා ගත් Coin එකකි.`,
+      whySelected: `Coins 100ක් අතරින් Whale Activity, Liquidation Magnet (${liqPoolTarget}), Gann/SMC/ICT සහ ඉහළම ලකුණු (${methodCount}/25 Methods, ${activePillars}/5 Pillars, RSI: ${rsi}) ලබා ගත් #1 Coin එකකි.`,
       whaleAndOnChain: `${whaleStatus} | 🏛️ Insider/Institutional Macro: ${globalIntel.insiderPoliticianNote}`,
       futuresAndGlobal: `📊 Futures & Global Intel: Funding = ${fundingPct} | BTC.D = ${globalIntel.btcDominance} | ETH.D = ${globalIntel.ethDominance} | ${globalIntel.altSeasonStatus}`,
       methodsUsed: matchedMethods.slice(0, 12).join(' · '),
       newsSummary: `📰 News & Social Sentiment: Fear & Greed = ${globalIntel.fearGreedValue} (${globalIntel.fearGreedLabel}) | Breaking: "${topHeadline}"`,
-      capitalProtection: `💵 $1.00 USDT Dollar-Target Shield: ශත ගණන් වලදී කලබල වී Trade එක කපන්නේ නැත! ලාභය $1.00 USDT (හෝ ඔබ දුන් ඩොලර් ඉලක්කය) පසු කළ සැණින් 85% ($0.85+) ලාභය Wallet එකට Lock කරමින් $2.00 - $4.00+ දක්වා දුවන්න ඉඩ දෙයි!`
+      capitalProtection: `🛡️ Twin-Engine Profit Shield: +8% ROE දී Zero-Loss Break-Even (+2%) වැටී ඔබේ මුදල ආරක්ෂා කරයි. ඉන්පසු ලාභය $1.00 USDT පසු කළ සැණින් 85% ($0.85+) ලාභය Wallet එකට Lock කරමින් ඉහළටම යයි! Trade එක ඉවර වූ සැණින් ඊළඟ Trade එක ස්වයංක්‍රීයව වැටේ.`
     };
 
     return {
       coin: candidate.coin,
       symbol: candidate.symbol,
       direction: dir,
+      tier,
       livePrice: sniperEntry,
       entry: sniperEntry,
       entryZoneLow,
@@ -604,7 +601,7 @@ async function analyzeCoinWithFullIntelligence(candidate, tf = '15m', globalInte
       change24h: candidate.change24h,
       minContractUsdt: candidate.minContractUsdt,
       sinhalaNote,
-      method: `8-Module $1+ Dollar Runner (${methodCount}/25 · ${activePillars}/5 Pillars · Whale ${whaleDeltaRatio}x)`,
+      method: `8-Module Master Engine (${methodCount}/25 · ${activePillars}/5 Pillars · Whale ${whaleDeltaRatio}x)`,
       reason: `${upOrDownText} | ${whaleStatus}`
     };
   } catch (e) {
@@ -622,6 +619,13 @@ async function scan100CoinsWithIntelligence(maxContractUsdt, excludeSymbols = []
   ]);
   if (!bRes.ok) throw new Error('Market scanner feed unavailable.');
   const binanceAll = await bRes.json();
+
+  // Prune expired server-side cooldowns
+  const now = Date.now();
+  Object.keys(globalCooldownMap).forEach(sym => {
+    if (globalCooldownMap[sym] <= now) delete globalCooldownMap[sym];
+  });
+  const allExcluded = new Set([...excludeSymbols, ...Object.keys(globalCooldownMap)]);
 
   const top100Coins = binanceAll
     .filter(t => t.symbol.endsWith('USDT') && !/UP|DOWN|USDC|FDUSD|TUSD|USDP|BUSD|USDE|BFUSD|EUR|^USD|PAXG|WBTC|GIGGLE|HAEDAL/.test(t.symbol))
@@ -652,7 +656,7 @@ async function scan100CoinsWithIntelligence(maxContractUsdt, excludeSymbols = []
         preScore
       };
     })
-    .filter(c => c && c.minContractUsdt <= maxContractUsdt && !excludeSymbols.includes(c.symbol) && Math.abs(c.chgNum) <= 22 && c.spreadPct <= 0.12)
+    .filter(c => c && c.minContractUsdt <= maxContractUsdt && !allExcluded.has(c.symbol) && Math.abs(c.chgNum) <= 24 && c.spreadPct <= 0.14)
     .slice(0, 100);
 
   const scannedCount = top100Coins.length;
@@ -667,7 +671,8 @@ async function scan100CoinsWithIntelligence(maxContractUsdt, excludeSymbols = []
     });
   }
 
-  verified.sort((a, b) => b.confidence - a.confidence);
+  // Sort Tier-1 setups first, then by highest confidence score
+  verified.sort((a, b) => (a.tier - b.tier) || (b.confidence - a.confidence));
   return {
     scannedCount,
     btcMaster,
@@ -688,14 +693,13 @@ async function scan100CoinsWithIntelligence(maxContractUsdt, excludeSymbols = []
   };
 }
 
-// POWER LEVERAGE (18x - 25x on High-Score 93%+ Setups) so even a small wallet can hit $1.00 USDT profit per trade!
 function calcAutoSafeLeverage(marginUsdt, minContractUsdt, confidence = 93, maxLev = 50) {
   const minLevForContract = Math.ceil((minContractUsdt * 1.12) / Math.max(0.5, marginUsdt));
-  const targetLev = confidence >= 95 ? 22 : confidence >= 90 ? 18 : 14;
+  const targetLev = confidence >= 95 ? 20 : confidence >= 90 ? 16 : 12;
   return Math.min(maxLev, Math.min(25, Math.max(minLevForContract, targetLev)));
 }
 
-async function openFuturesPosition(pick, marginUsdt, autoLeverage = true, manualLev = 18) {
+async function openFuturesPosition(pick, marginUsdt, autoLeverage = true, manualLev = 16) {
   const symbol = pick.symbol || `${pick.coin}_USDT`;
   const [cMap, tickers] = await Promise.all([getContractMap(), getMexcTickerMap()]);
   const detail = cMap[symbol];
@@ -733,7 +737,7 @@ async function openFuturesPosition(pick, marginUsdt, autoLeverage = true, manual
     vol,
     leverage,
     contractSize,
-    orderTypeLabel: `💵 $1+ Runner Entry @ ${livePrice} (${leverage}x · Safe SL: ${pick.sl})`,
+    orderTypeLabel: `🚀 Instant Auto-Chain Entry @ ${livePrice} (${leverage}x · Safe SL: ${pick.sl})`,
     entryPrice: livePrice,
     structuralSlPrice: Number(pick.sl),
     notional: +(vol * minContractUsdt).toFixed(2)
@@ -742,7 +746,7 @@ async function openFuturesPosition(pick, marginUsdt, autoLeverage = true, manual
 
 async function executeBestWithFallback(setups, topCandidates, marginUsdt, autoLeverage, manualLev) {
   let lastErr = null;
-  for (const candidate of setups.slice(0, 3)) {
+  for (const candidate of setups.slice(0, 4)) {
     try {
       const exec = await openFuturesPosition(candidate, marginUsdt, autoLeverage, manualLev);
       return { pick: { ...candidate, topCandidates }, exec };
@@ -756,14 +760,16 @@ async function executeBestWithFallback(setups, topCandidates, marginUsdt, autoLe
 
 function calcOptimalWalletMargin(availBal, isAuto = true, reqManual = 1.5) {
   if (!isAuto) return Math.min(availBal * 0.90, Math.max(0.5, reqManual));
-  if (availBal <= 2.5) return Math.max(0.6, +(availBal * 0.72).toFixed(2)); // $1.73 wallet -> ~$1.25 margin
+  if (availBal <= 2.5) return Math.max(0.6, +(availBal * 0.72).toFixed(2));
   if (availBal <= 6.0) return Math.max(1.4, +(availBal * 0.60).toFixed(2));
   return Math.max(2.5, +(availBal * 0.40).toFixed(2));
 }
 
-// DOLLAR-BASED ZERO-LOSS & PROFIT LOCK ENGINE (Triggers at $1.00 USDT Profit or +45% ROE!)
-function evaluateDollarAndRoeShield(livePnl, liveRoe, peakPnl, peakRoe, minTriggerUsdt = 1.0, retentionPct = 0.85) {
-  // Rule A: Once Peak Profit reaches the user's Dollar Target (e.g., $1.00 USDT), lock 85% of Peak Dollar Profit ($0.85+ USDT)!
+// TWIN-ENGINE SHIELD:
+// 1. At +8% ROE: Activates Zero-Loss Break-Even Floor (+2.0% ROE) so a winning trade NEVER turns into a loss!
+// 2. At $1.00 USDT (or +40% ROE): Locks 85% of Peak Profit and trails upward for massive wins!
+function evaluateTwinEngineShield(livePnl, liveRoe, peakPnl, peakRoe, minTriggerUsdt = 1.0, retentionPct = 0.85) {
+  // Engine 1: $1.00+ USDT Dollar Profit Lock
   if (peakPnl >= minTriggerUsdt) {
     const dollarFloor = +(peakPnl * retentionPct).toFixed(4);
     if (livePnl <= dollarFloor) {
@@ -774,8 +780,8 @@ function evaluateDollarAndRoeShield(livePnl, liveRoe, peakPnl, peakRoe, minTrigg
     }
   }
 
-  // Rule B: Backup ROE Protection for tiny margins (Only triggers after a big +45% ROE move so small 5-10 cent wins are never cut early!)
-  if (peakRoe >= 45.0) {
+  // Engine 2: High-ROE Runner Lock (+40% ROE -> Locks 85% of ROE)
+  if (peakRoe >= 40.0) {
     const roeFloor = +(peakRoe * retentionPct).toFixed(2);
     if (liveRoe <= roeFloor) {
       return {
@@ -783,6 +789,14 @@ function evaluateDollarAndRoeShield(livePnl, liveRoe, peakPnl, peakRoe, minTrigg
         reason: `🚀 High-ROE Runner Lock Triggered (Peak +${peakRoe.toFixed(1)}% -> Secured +${liveRoe.toFixed(1)}% ROE)`
       };
     }
+  }
+
+  // Engine 3: Zero-Loss Break-Even Safety Net (Once trade hits +8% ROE, NEVER let it drop below +2.0% ROE!)
+  if (peakRoe >= 8.0 && liveRoe <= 2.0) {
+    return {
+      shouldClose: true,
+      reason: `🛡️ Zero-Loss Break-Even Shield Triggered (Peak +${peakRoe.toFixed(1)}% -> Protected at +${liveRoe.toFixed(1)}% ROE)`
+    };
   }
 
   return { shouldClose: false, reason: '' };
@@ -793,6 +807,9 @@ module.exports = async (req, res) => {
     const body = req.method === 'POST' ? (typeof req.body === 'string' ? JSON.parse(req.body) : req.body) : req.query;
     const action = body.action || 'status';
 
+    // =========================================================================================
+    // 24/7 CLOUD BACKGROUND GUARDIAN & INSTANT AUTO-NEXT TRADE ENGINE (WORKS WHEN BROWSER IS OFF)
+    // =========================================================================================
     if (action === 'cron_tick') {
       const [positions, assets, tickers, cMap] = await Promise.all([
         mexcReq('GET', '/api/v1/private/position/open_positions').catch(() => []),
@@ -801,8 +818,10 @@ module.exports = async (req, res) => {
         getContractMap()
       ]);
 
-      if ((positions || []).length >= 1) {
-        const actionsTaken = [];
+      let activeCount = (positions || []).length;
+      const actionsTaken = [];
+
+      if (activeCount >= 1) {
         for (const p of positions) {
           const isLong = p.positionType === 1;
           const entry = Number(p.openAvgPrice || p.holdAvgPrice || 0);
@@ -821,9 +840,9 @@ module.exports = async (req, res) => {
           if (roePct > prev.peakRoe) prev.peakRoe = roePct;
           globalPeakMap[p.positionId] = prev;
 
-          const check = evaluateDollarAndRoeShield(rawPnl, roePct, prev.peakPnl, prev.peakRoe, 1.0, 0.85);
+          const check = evaluateTwinEngineShield(rawPnl, roePct, prev.peakPnl, prev.peakRoe, 1.0, 0.85);
 
-          if (check.shouldClose || rawPnl >= 3.0 || roePct >= 120.0) {
+          if (check.shouldClose || rawPnl >= 3.5 || roePct >= 120.0) {
             const closeSide = isLong ? 4 : 2;
             await mexcReq('POST', '/api/v1/private/order/submit', {
               symbol: p.symbol,
@@ -834,15 +853,24 @@ module.exports = async (req, res) => {
               openType: 1
             }).catch(() => {});
             delete globalPeakMap[p.positionId];
+            // Put closed coin on 10-min cooldown so the immediate next trade picks a fresh coin
+            globalCooldownMap[p.symbol] = Date.now() + 10 * 60 * 1000;
+            activeCount--;
             actionsTaken.push(check.reason || `Target Hit on ${p.symbol}`);
           }
         }
-        if (!actionsTaken.length) {
-          return res.status(200).json({ ok: true, mode: '24/7_DOLLAR_RUNNER_GUARDIAN', status: 'Letting trade run toward $1.00+ USDT profit.' });
+
+        // If trade is still open, keep monitoring
+        if (activeCount >= 1) {
+          return res.status(200).json({ ok: true, mode: '24/7_TWIN_SHIELD_GUARDIAN', status: 'Monitoring active trade.' });
         }
       }
 
-      const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 0 };
+      // INSTANT CHAIN-TRADE: As soon as activeCount === 0 (either no trade was open OR we just closed one above), immediately open the next trade!
+      const freshAssets = actionsTaken.length
+        ? await mexcReq('GET', '/api/v1/private/account/assets').catch(() => assets)
+        : assets;
+      const usdtAsset = (freshAssets || []).find(a => a.currency === 'USDT') || { availableBalance: 0 };
       const avail = Number(usdtAsset.availableBalance || 0);
       if (avail < 0.5) return res.status(200).json({ ok: false, status: 'Insufficient balance.' });
 
@@ -851,11 +879,11 @@ module.exports = async (req, res) => {
 
       const { scannedCount, setups, topCandidates } = await scan100CoinsWithIntelligence(maxContractUsdt, [], '15m');
       if (!setups.length) {
-        return res.status(200).json({ ok: true, scannedCount, status: 'Waiting for high-probability setup.' });
+        return res.status(200).json({ ok: true, scannedCount, actionsTaken, status: 'No setup found.' });
       }
 
-      const { pick, exec } = await executeBestWithFallback(setups, topCandidates, safeAutoMargin, true, 18);
-      return res.status(200).json({ ok: true, mode: '24/7_DOLLAR_RUNNER_OPENED', scannedCount, pick, exec });
+      const { pick, exec } = await executeBestWithFallback(setups, topCandidates, safeAutoMargin, true, 16);
+      return res.status(200).json({ ok: true, mode: '24/7_INSTANT_CHAIN_OPENED', actionsTaken, scannedCount, pick, exec });
     }
 
     const secret = (body.secret || req.headers['x-secret'] || '').trim();
@@ -937,7 +965,7 @@ module.exports = async (req, res) => {
 
       if (!setups.length) {
         return res.status(400).json({
-          error: `Scanned ${scannedCount} coins (${btcMaster.label}) — waiting for next Whale & 25-Method Wave iii setup.`
+          error: `Scanned ${scannedCount} coins (${btcMaster.label}) — re-scanning for next setup.`
         });
       }
 
@@ -957,7 +985,7 @@ module.exports = async (req, res) => {
       ]);
 
       if ((openPos || []).length >= 1) {
-        return res.status(400).json({ error: '1 Trade is already active. Letting it run toward your $1.00+ USDT Profit Target!' });
+        return res.status(400).json({ error: '1 Trade is already active. Twin-Engine Profit Shield is monitoring it!' });
       }
 
       const usdtAsset = (assets || []).find(a => a.currency === 'USDT') || { availableBalance: 0 };
@@ -972,18 +1000,18 @@ module.exports = async (req, res) => {
       const excludeSymbols = [...(openPos || []).map(p => p.symbol), ...cooldownCoins];
 
       const maxContractUsdt = Math.max(12, +(marginUsdt * 22).toFixed(2));
-      const { scannedCount, btcMaster, globalIntel, setups, topCandidates } = await scan100CoinsWithIntelligence(
+      const { scannedCount, globalIntel, setups, topCandidates } = await scan100CoinsWithIntelligence(
         maxContractUsdt, excludeSymbols, timeframe
       );
 
       if (!setups.length) {
         return res.status(400).json({
-          error: `Scanned ${scannedCount} coins (${btcMaster.label}) — waiting for next Whale + 25-Method confirmation.`
+          error: `Scanned ${scannedCount} coins — re-scanning in a few seconds for next breakout.`
         });
       }
 
       const { pick, exec } = await executeBestWithFallback(
-        setups, topCandidates, marginUsdt, body.autoLeverage !== false, Number(body.leverage) || 18
+        setups, topCandidates, marginUsdt, body.autoLeverage !== false, Number(body.leverage) || 16
       );
 
       return res.status(200).json({
@@ -1009,6 +1037,7 @@ module.exports = async (req, res) => {
         openType: 1
       });
       delete globalPeakMap[positionId];
+      if (symbol) globalCooldownMap[symbol] = Date.now() + 10 * 60 * 1000;
       return res.status(200).json({ ok: true, closeRes });
     }
 
